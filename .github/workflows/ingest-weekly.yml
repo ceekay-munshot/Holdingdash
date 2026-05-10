@@ -70,5 +70,5 @@ jobs:
           fi
           STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           git add -A
-          git commit -m "Weekly master refresh @ $STAMP"
+          git commit -m "Weekly master refresh @ $STAMP [skip ci]"
           git push origin HEAD:data
