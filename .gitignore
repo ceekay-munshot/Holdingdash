@@ -13,6 +13,12 @@ dist-ssr
 *.local
 .wrangler
 
+# ingestion local artefacts
+data-out/
+ingestion/__pycache__/
+ingestion/**/__pycache__/
+*.pyc
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
