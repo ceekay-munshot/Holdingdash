@@ -186,12 +186,72 @@ def aggregate_shareholding() -> int:
     return len(symbols)
 
 
+def aggregate_shareholding_yearly() -> int:
+    """Derive yearly snapshots from quarterly data.
+
+    For each symbol, pick the Q4 (Mar 31) of each Indian FY as the yearly
+    snapshot. FY25 ends Mar 31, 2025. Result is a smaller, cleaner series
+    suitable for the 5-7 year yearly trend view.
+
+    Writes by_ticker/{SYMBOL}/shareholding_yearly.json
+    """
+    root = out_root()
+    shp_root = root / "shareholding"
+    if not shp_root.exists():
+        return 0
+    symbols = [d for d in shp_root.iterdir() if d.is_dir()]
+    written = 0
+    for sym_dir in symbols:
+        symbol = sym_dir.name
+        files = sorted(sym_dir.glob("*.json"))
+        if not files:
+            continue
+        # Group by FY using the quarter date. A quarter date YYYY-03-31 is FY{YY}.
+        by_fy: dict[str, dict] = {}
+        for f in files:
+            try:
+                with f.open("r", encoding="utf-8") as fh:
+                    q = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                continue
+            quarter = q.get("quarter") or ""
+            if not quarter.endswith("-03-31"):
+                continue
+            yyyy = quarter[:4]
+            fy = f"FY{int(yyyy) % 100:02d}"
+            by_fy[fy] = {
+                "fy": fy,
+                "quarterEnd": quarter,
+                "scripCode": q.get("scripCode") or "",
+                "promoter": q.get("promoter", 0.0),
+                "fii": q.get("fii", 0.0),
+                "dii": q.get("dii", 0.0),
+                "public": q.get("public", 0.0),
+            }
+        if not by_fy:
+            continue
+        years = sorted(by_fy.values(), key=lambda r: r["quarterEnd"])
+        write_json(
+            f"by_ticker/{symbol}/shareholding_yearly.json",
+            {
+                "symbol": symbol,
+                "source": "BSE (derived from quarterly Q4 of each FY)",
+                "count": len(years),
+                "years": years,
+            },
+        )
+        written += 1
+    log(f"aggregate: wrote yearly shareholding for {written} symbols")
+    return written
+
+
 def main() -> int:
     log("aggregate: starting per-ticker rollup")
     aggregate_prices()
     aggregate_insider()
     aggregate_deals()
     aggregate_shareholding()
+    aggregate_shareholding_yearly()
     return 0
 
 
