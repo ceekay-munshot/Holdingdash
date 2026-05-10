@@ -12,10 +12,13 @@ import {
   Scale,
   X,
   ArrowLeftRight,
+  Wifi,
+  WifiOff,
+  Star,
 } from 'lucide-react'
-import { companyMaster } from '../data/companyMaster'
 import type { Company } from '../types'
 import { useRecents } from '../lib/recents'
+import { useEquityMaster } from '../lib/useEquityMaster'
 
 type Mode = 'single' | 'compare'
 
@@ -24,11 +27,14 @@ interface Props {
   onCompare: (a: Company, b: Company) => void
 }
 
+const MAX_LIST = 40 // cap dropdown for huge universe
+
 export default function CompanyLaunchPanel({ onLaunch, onCompare }: Props) {
   const [mode, setMode] = useState<Mode>('single')
   const [selectedA, setSelectedA] = useState<Company | null>(null)
   const [selectedB, setSelectedB] = useState<Company | null>(null)
   const { recents } = useRecents()
+  const master = useEquityMaster()
 
   const canLaunch =
     mode === 'single'
@@ -164,11 +170,40 @@ export default function CompanyLaunchPanel({ onLaunch, onCompare }: Props) {
               </div>
             )}
 
+            {/* Universe status strip */}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
+              <div className="flex items-center gap-2">
+                {master.loading ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white px-2 py-1 font-semibold text-ink-500">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ink-400" />
+                    Loading universe…
+                  </span>
+                ) : master.source === 'live' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 font-semibold text-emerald-700">
+                    <Wifi className="h-3 w-3" />
+                    Live · {master.all.length.toLocaleString('en-IN')} NSE-listed
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 font-semibold text-amber-700">
+                    <WifiOff className="h-3 w-3" />
+                    Featured only · {master.featured.length} companies
+                  </span>
+                )}
+              </div>
+              {master.updated && (
+                <span className="text-ink-400">
+                  Refreshed {new Date(master.updated).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+
             {/* Pickers */}
             {mode === 'single' ? (
               <SinglePicker
                 selected={selectedA}
                 onChange={setSelectedA}
+                universe={master.all}
+                featured={master.featured}
               />
             ) : (
               <ComparePicker
@@ -176,6 +211,8 @@ export default function CompanyLaunchPanel({ onLaunch, onCompare }: Props) {
                 b={selectedB}
                 onChangeA={setSelectedA}
                 onChangeB={setSelectedB}
+                universe={master.all}
+                featured={master.featured}
                 onSwap={() => {
                   setSelectedA(selectedB)
                   setSelectedB(selectedA)
@@ -232,13 +269,23 @@ export default function CompanyLaunchPanel({ onLaunch, onCompare }: Props) {
 function SinglePicker({
   selected,
   onChange,
+  universe,
+  featured,
 }: {
   selected: Company | null
   onChange: (c: Company) => void
+  universe: Company[]
+  featured: Company[]
 }) {
   return (
     <>
-      <Combobox label="Company Name" selected={selected} onChange={onChange} />
+      <Combobox
+        label="Company Name"
+        selected={selected}
+        onChange={onChange}
+        universe={universe}
+        featured={featured}
+      />
       <div className="mt-5 grid grid-cols-3 gap-3">
         <AutoField
           label="Ticker"
@@ -269,12 +316,16 @@ function ComparePicker({
   onChangeA,
   onChangeB,
   onSwap,
+  universe,
+  featured,
 }: {
   a: Company | null
   b: Company | null
   onChangeA: (c: Company | null) => void
   onChangeB: (c: Company | null) => void
   onSwap: () => void
+  universe: Company[]
+  featured: Company[]
 }) {
   return (
     <div className="grid items-stretch gap-3 md:grid-cols-[1fr_auto_1fr]">
@@ -284,6 +335,8 @@ function ComparePicker({
         onChange={onChangeA}
         accent="emerald"
         otherTicker={b?.ticker}
+        universe={universe}
+        featured={featured}
       />
       <button
         type="button"
@@ -301,6 +354,8 @@ function ComparePicker({
         onChange={onChangeB}
         accent="indigo"
         otherTicker={a?.ticker}
+        universe={universe}
+        featured={featured}
       />
     </div>
   )
@@ -312,12 +367,16 @@ function ComparePickerSide({
   onChange,
   accent,
   otherTicker,
+  universe,
+  featured,
 }: {
   label: string
   selected: Company | null
   onChange: (c: Company | null) => void
   accent: 'emerald' | 'indigo'
   otherTicker?: string
+  universe: Company[]
+  featured: Company[]
 }) {
   const accentRing = accent === 'emerald' ? 'ring-emerald-200' : 'ring-indigo-200'
   const accentText = accent === 'emerald' ? 'text-emerald-700' : 'text-indigo-700'
@@ -338,7 +397,15 @@ function ComparePickerSide({
           </button>
         )}
       </div>
-      <Combobox label="" selected={selected} onChange={onChange} compact disabledTicker={otherTicker} />
+      <Combobox
+        label=""
+        selected={selected}
+        onChange={onChange}
+        compact
+        disabledTicker={otherTicker}
+        universe={universe}
+        featured={featured}
+      />
       {selected ? (
         <div className={`mt-3 rounded-xl border ${accentBorder} ${accentBg} px-3 py-2`}>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">Auto-filled</div>
@@ -364,22 +431,39 @@ function Combobox({
   onChange,
   compact,
   disabledTicker,
+  universe,
+  featured,
 }: {
   label: string
   selected: Company | null
   onChange: (c: Company) => void
   compact?: boolean
   disabledTicker?: string
+  universe: Company[]
+  featured: Company[]
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
-  const filtered = useMemo(() => {
+  const featuredTickers = useMemo(() => new Set(featured.map((c) => c.ticker)), [featured])
+  const { rows, isSearching, totalMatched } = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return companyMaster
-    return companyMaster.filter(
+    if (!q) return { rows: featured, isSearching: false, totalMatched: featured.length }
+    const all = universe.filter(
       (c) => c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q),
     )
-  }, [query])
+    // featured first (curated), then everything else
+    const featuredHits = all.filter((c) => featuredTickers.has(c.ticker))
+    const otherHits = all.filter((c) => !featuredTickers.has(c.ticker))
+    const combined = [...featuredHits, ...otherHits].slice(0, MAX_LIST)
+    return { rows: combined, isSearching: true, totalMatched: all.length }
+  }, [query, universe, featured, featuredTickers])
+
+  const placeholder =
+    compact
+      ? 'Pick a company...'
+      : universe.length > featured.length
+      ? `Search ${universe.length.toLocaleString('en-IN')} NSE-listed companies...`
+      : 'Search 10 featured companies...'
 
   return (
     <div className="relative">
@@ -398,7 +482,7 @@ function Combobox({
         <div className="flex items-center gap-2.5 truncate">
           <Building2 className="h-4 w-4 text-ink-400 group-hover:text-emerald-600" />
           <span className={selected ? 'truncate font-semibold text-ink-900' : 'truncate text-ink-400'}>
-            {selected ? selected.name : compact ? 'Pick a company...' : 'Search 10 listed companies...'}
+            {selected ? selected.name : placeholder}
           </span>
         </div>
         <ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -415,16 +499,28 @@ function Combobox({
               placeholder="Type a name or ticker..."
               className="flex-1 bg-transparent text-sm placeholder-ink-400 focus:outline-none"
             />
+            {isSearching && (
+              <span className="rounded-md bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-ink-600">
+                {totalMatched > MAX_LIST ? `${MAX_LIST}+` : totalMatched}
+              </span>
+            )}
           </div>
+          {!isSearching && (
+            <div className="flex items-center gap-1.5 border-b border-ink-100 bg-ink-50/40 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-500">
+              <Star className="h-3 w-3" />
+              Featured
+            </div>
+          )}
           <div className="max-h-72 overflow-y-auto py-1 drawer-scroll">
-            {filtered.length === 0 && (
+            {rows.length === 0 && (
               <div className="px-4 py-6 text-center text-sm text-ink-400">
                 No matches. Try Reliance, Infosys, HDFC...
               </div>
             )}
-            {filtered.map((c) => {
+            {rows.map((c) => {
               const isActive = selected?.ticker === c.ticker
               const isDisabled = disabledTicker === c.ticker && !isActive
+              const isFeatured = featuredTickers.has(c.ticker)
               return (
                 <button
                   key={c.ticker}
@@ -442,12 +538,17 @@ function Combobox({
                       : 'hover:bg-ink-50'
                   }`}
                 >
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-ink-800">{c.name}</span>
-                    <span className="text-[11px] text-ink-400">
-                      {c.exchange} · {c.country}
-                      {isDisabled && ' · already in compare'}
-                    </span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    {isSearching && isFeatured && (
+                      <Star className="h-3 w-3 shrink-0 text-amber-500" aria-label="Featured" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-semibold text-ink-800">{c.name}</div>
+                      <div className="text-[11px] text-ink-400">
+                        {c.exchange} · {c.country}
+                        {isDisabled && ' · already in compare'}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="rounded-md bg-ink-100 px-2 py-0.5 font-mono text-[11px] text-ink-600">{c.ticker}</span>
@@ -457,6 +558,11 @@ function Combobox({
               )
             })}
           </div>
+          {isSearching && totalMatched > MAX_LIST && (
+            <div className="border-t border-ink-100 bg-ink-50/40 px-4 py-1.5 text-center text-[10px] text-ink-500">
+              Showing first {MAX_LIST} of {totalMatched.toLocaleString('en-IN')} matches — refine your search
+            </div>
+          )}
         </div>
       )}
     </div>

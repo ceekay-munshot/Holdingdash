@@ -15,6 +15,7 @@ import { getOwnershipTrends } from './data/mockHolders'
 import { getInsiderDeals } from './data/mockInsiders'
 import { getGovernance } from './data/mockGovernance'
 import { useRecents } from './lib/recents'
+import { useLiveTicker } from './lib/useLiveTicker'
 import type { Company, TabKey } from './types'
 
 type Stage = 'select' | 'loading' | 'dashboard' | 'compare'
@@ -32,6 +33,7 @@ export default function App() {
   const trends = useMemo(() => (company ? getOwnershipTrends(company.ticker) : null), [company])
   const insider = useMemo(() => (company ? getInsiderDeals(company.ticker) : null), [company])
   const governance = useMemo(() => (company ? getGovernance(company.ticker) : null), [company])
+  const live = useLiveTicker(company?.ticker ?? null)
 
   function handleLaunch(c: Company) {
     addRecent(c)
@@ -116,6 +118,8 @@ export default function App() {
           onExportExcel={() => handleExport('excel')}
           onExportPdf={() => handleExport('pdf')}
           onOpenVerdict={() => setVerdictOpen(true)}
+          liveSourceDate={live.latestSourceDate}
+          liveLoading={live.loading}
         />
         <TabNavigation active={activeTab} onChange={setActiveTab} />
         <main key={activeTab} className="animate-fadeUp">
@@ -125,7 +129,13 @@ export default function App() {
           {activeTab === 'trends' && (
             <OwnershipTrendsTab overview={overview} trends={trends} />
           )}
-          {activeTab === 'insider' && <InsiderDealsTab data={insider} />}
+          {activeTab === 'insider' && (
+            <InsiderDealsTab
+              data={insider}
+              livePrices={live.prices}
+              liveDeals={live.deals}
+            />
+          )}
           {activeTab === 'governance' && (
             <GovernanceRiskTab data={governance} companyName={company.name} />
           )}
