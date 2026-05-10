@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeftRight, ShieldAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 import './App.css'
 import CompanyLaunchPanel from './components/CompanyLaunchPanel'
 import LoadingProgress from './components/LoadingProgress'
@@ -7,9 +7,11 @@ import DashboardHeader from './components/DashboardHeader'
 import TabNavigation from './components/TabNavigation'
 import OverviewTab from './components/OverviewTab'
 import OwnershipTrendsTab from './components/OwnershipTrendsTab'
+import InsiderDealsTab from './components/InsiderDealsTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import { getOverview } from './data/mockOverview'
 import { getOwnershipTrends } from './data/mockHolders'
+import { getInsiderDeals } from './data/mockInsiders'
 import type { Company, TabKey } from './types'
 
 type Stage = 'select' | 'loading' | 'dashboard'
@@ -21,6 +23,7 @@ export default function App() {
 
   const overview = useMemo(() => (company ? getOverview(company.ticker) : null), [company])
   const trends = useMemo(() => (company ? getOwnershipTrends(company.ticker) : null), [company])
+  const insider = useMemo(() => (company ? getInsiderDeals(company.ticker) : null), [company])
 
   function handleLaunch(c: Company) {
     setCompany(c)
@@ -56,7 +59,7 @@ export default function App() {
   if (stage === 'loading' && company) {
     return <LoadingProgress company={company} onDone={handleLoadDone} />
   }
-  if (stage === 'dashboard' && company && overview && trends) {
+  if (stage === 'dashboard' && company && overview && trends && insider) {
     return (
       <div className="min-h-screen bg-ink-50/50">
         <DashboardHeader
@@ -73,13 +76,7 @@ export default function App() {
           {activeTab === 'trends' && (
             <OwnershipTrendsTab overview={overview} trends={trends} />
           )}
-          {activeTab === 'insider' && (
-            <PlaceholderTab
-              tab="insider"
-              icon={ArrowLeftRight}
-              onBackToOverview={() => setActiveTab('overview')}
-            />
-          )}
+          {activeTab === 'insider' && <InsiderDealsTab data={insider} />}
           {activeTab === 'governance' && (
             <PlaceholderTab
               tab="governance"

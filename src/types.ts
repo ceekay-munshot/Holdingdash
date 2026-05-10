@@ -149,3 +149,88 @@ export interface OwnershipTrendsData {
   holders: HolderRow[]
   breadth: BreadthPoint[]
 }
+
+/* ========== Insider & Deals tab ========== */
+
+export type InsiderHorizon = '1Y' | '2Y' | '5Y' | '10Y' | 'Max'
+
+export type InsiderRole =
+  | 'Promoter'
+  | 'CEO/MD'
+  | 'CFO'
+  | 'Director'
+  | 'KMP'
+  | 'Promoter Group'
+
+export type InsiderType = 'Buy' | 'Sell'
+
+export type InsiderClassification =
+  | 'Strong Buy'
+  | 'Moderate Buy'
+  | 'Routine Sell'
+  | 'Meaningful Sell'
+  | 'Cluster Sell'
+  | 'Watch'
+  | 'Ignore'
+
+export interface InsiderTrade {
+  date: string // YYYY-MM-DD
+  insider: string
+  role: InsiderRole
+  type: InsiderType
+  value: number // INR Cr
+  price: number // per share INR
+  classification: InsiderClassification
+  note: string // short read like "ESOP-driven", "Diversification", "Open market accumulation"
+}
+
+export interface PricePoint {
+  date: string // YYYY-MM-DD
+  price: number
+}
+
+export type InsiderSignal = 'Positive' | 'Neutral' | 'Watch' | 'Risky'
+
+export interface InsiderSignalCard {
+  key: 'net' | 'buyIntensity' | 'sellPattern' | 'silence'
+  label: string
+  value: string
+  read: string
+  tone: 'positive' | 'neutral' | 'watch' | 'risky'
+}
+
+export interface InsiderSignalSummary {
+  signal: InsiderSignal
+  oneLiner: string
+  mainPositive: string
+  mainConcern: string
+  cards: InsiderSignalCard[]
+  finalRead: string
+}
+
+export type DealType = 'Bulk' | 'Block'
+
+export type DealSignal =
+  | 'Institutional Accumulation'
+  | 'Large Exit'
+  | 'Churn'
+  | 'Unusual'
+  | 'Neutral'
+
+export interface BulkBlockDeal {
+  date: string
+  buyer: string
+  seller: string
+  dealType: DealType
+  value: number // INR Cr
+  premiumPct: number // vs market — negative = discount
+  signal: DealSignal
+}
+
+export interface InsiderDealsData {
+  summary: InsiderSignalSummary
+  pricePoints: PricePoint[] // monthly, 10y
+  trades: InsiderTrade[] // 10y span
+  deals: BulkBlockDeal[]
+  dealsRead: string
+}
