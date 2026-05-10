@@ -1,23 +1,33 @@
-name: Ingest daily (prices, insider, deals)
+name: Ingest shareholding (BSE)
 
-# Runs every weekday at 14:00 UTC (~19:30 IST), well after Indian market close.
-# Plus a manual trigger for backfills / debugging.
+# Pulls quarterly shareholding patterns from BSE for the watch universe.
+# Companies file shareholding within 45 days of quarter end, so this
+# runs weekly on Saturday to catch any newly filed quarters.
 on:
   schedule:
-    - cron: '0 14 * * 1-5'
+    - cron: '0 4 * * 6'  # Sat 04:00 UTC
   workflow_dispatch:
+    inputs:
+      symbols:
+        description: 'Comma-separated NSE symbols (default NIFTY 50)'
+        required: false
+        default: ''
+      quarters:
+        description: 'Quarter-ends to pull (default 8)'
+        required: false
+        default: '8'
 
 permissions:
   contents: write
 
 concurrency:
-  group: ingest-daily
+  group: ingest-shareholding
   cancel-in-progress: false
 
 jobs:
-  ingest:
+  shareholding:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       OUT_DIR: ${{ github.workspace }}/data-out
     steps:
@@ -38,7 +48,6 @@ jobs:
       - name: Init data branch if missing
         run: |
           if [ ! -d "${{ github.workspace }}/data-out/.git" ]; then
-            echo "Initialising orphan data branch ..."
             mkdir -p "${{ github.workspace }}/data-out"
             cd "${{ github.workspace }}/data-out"
             git init -b data
@@ -56,31 +65,24 @@ jobs:
         working-directory: source
         run: pip install -r ingestion/requirements.txt
 
-      - name: Fetch bhavcopy (prices)
+      - name: Refresh BSE master + NSE→BSE map
         working-directory: source
-        run: python -m ingestion.scripts.fetch_bhavcopy
-        continue-on-error: true
+        run: python -m ingestion.scripts.fetch_bse_master
 
-      - name: Fetch bulk + block deals
+      - name: Fetch shareholding patterns
         working-directory: source
-        run: python -m ingestion.scripts.fetch_deals
-        continue-on-error: true
-
-      - name: Fetch insider trades (NSE)
-        working-directory: source
-        run: python -m ingestion.scripts.fetch_insider
-        continue-on-error: true
-
-      - name: Fetch insider trades (BSE fallback)
-        working-directory: source
-        run: python -m ingestion.scripts.fetch_insider_bse
-        continue-on-error: true
+        run: |
+          if [ -n "${{ inputs.symbols }}" ]; then
+            python -m ingestion.scripts.fetch_shareholding --symbols "${{ inputs.symbols }}" --quarters ${{ inputs.quarters }}
+          else
+            python -m ingestion.scripts.fetch_shareholding --quarters ${{ inputs.quarters }}
+          fi
 
       - name: Aggregate per-ticker rollups
         working-directory: source
         run: python -m ingestion.scripts.aggregate_per_ticker
 
-      - name: Commit + push to data branch
+      - name: Commit + push
         working-directory: data-out
         run: |
           set -e
@@ -92,5 +94,5 @@ jobs:
           fi
           STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           git add -A
-          git commit -m "Daily ingest @ $STAMP [skip ci]"
+          git commit -m "Shareholding refresh @ $STAMP [skip ci]"
           git push origin HEAD:data

@@ -149,11 +149,49 @@ def aggregate_deals() -> int:
     return len(all_symbols)
 
 
+def aggregate_shareholding() -> int:
+    """Roll up shareholding/{SYMBOL}/{date}.json into by_ticker/{SYMBOL}/shareholding.json.
+
+    Idempotent and safe to re-run after each quarterly fetch.
+    """
+    root = out_root()
+    shp_root = root / "shareholding"
+    if not shp_root.exists():
+        return 0
+    symbols = [d for d in shp_root.iterdir() if d.is_dir()]
+    for sym_dir in symbols:
+        symbol = sym_dir.name
+        files = sorted(sym_dir.glob("*.json"))
+        quarters: list[dict] = []
+        for f in files:
+            try:
+                with f.open("r", encoding="utf-8") as fh:
+                    quarters.append(json.load(fh))
+            except (OSError, json.JSONDecodeError):
+                continue
+        if not quarters:
+            continue
+        quarters.sort(key=lambda r: r.get("quarter") or "")
+        write_json(
+            f"by_ticker/{symbol}/shareholding.json",
+            {
+                "symbol": symbol,
+                "scripCode": quarters[-1].get("scripCode") or "",
+                "source": "BSE",
+                "count": len(quarters),
+                "quarters": quarters,
+            },
+        )
+    log(f"aggregate: wrote shareholding for {len(symbols)} symbols")
+    return len(symbols)
+
+
 def main() -> int:
     log("aggregate: starting per-ticker rollup")
     aggregate_prices()
     aggregate_insider()
     aggregate_deals()
+    aggregate_shareholding()
     return 0
 
 

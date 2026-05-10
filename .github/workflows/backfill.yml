@@ -1,23 +1,27 @@
-name: Ingest daily (prices, insider, deals)
+name: Backfill bhavcopy (manual)
 
-# Runs every weekday at 14:00 UTC (~19:30 IST), well after Indian market close.
-# Plus a manual trigger for backfills / debugging.
+# One-shot backfill of the last N trading days of NSE bhavcopy. Run this once
+# after first setting up the data branch so every ticker has price history.
+# After this, the daily cron keeps things current.
 on:
-  schedule:
-    - cron: '0 14 * * 1-5'
   workflow_dispatch:
+    inputs:
+      days:
+        description: 'Calendar days to backfill (default 90)'
+        required: false
+        default: '90'
 
 permissions:
   contents: write
 
 concurrency:
-  group: ingest-daily
+  group: backfill
   cancel-in-progress: false
 
 jobs:
-  ingest:
+  backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     env:
       OUT_DIR: ${{ github.workspace }}/data-out
     steps:
@@ -38,7 +42,6 @@ jobs:
       - name: Init data branch if missing
         run: |
           if [ ! -d "${{ github.workspace }}/data-out/.git" ]; then
-            echo "Initialising orphan data branch ..."
             mkdir -p "${{ github.workspace }}/data-out"
             cd "${{ github.workspace }}/data-out"
             git init -b data
@@ -56,31 +59,15 @@ jobs:
         working-directory: source
         run: pip install -r ingestion/requirements.txt
 
-      - name: Fetch bhavcopy (prices)
+      - name: Backfill bhavcopy
         working-directory: source
-        run: python -m ingestion.scripts.fetch_bhavcopy
-        continue-on-error: true
-
-      - name: Fetch bulk + block deals
-        working-directory: source
-        run: python -m ingestion.scripts.fetch_deals
-        continue-on-error: true
-
-      - name: Fetch insider trades (NSE)
-        working-directory: source
-        run: python -m ingestion.scripts.fetch_insider
-        continue-on-error: true
-
-      - name: Fetch insider trades (BSE fallback)
-        working-directory: source
-        run: python -m ingestion.scripts.fetch_insider_bse
-        continue-on-error: true
+        run: python -m ingestion.scripts.backfill_bhavcopy --days ${{ inputs.days }}
 
       - name: Aggregate per-ticker rollups
         working-directory: source
         run: python -m ingestion.scripts.aggregate_per_ticker
 
-      - name: Commit + push to data branch
+      - name: Commit + push
         working-directory: data-out
         run: |
           set -e
@@ -92,5 +79,5 @@ jobs:
           fi
           STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           git add -A
-          git commit -m "Daily ingest @ $STAMP [skip ci]"
+          git commit -m "Bhavcopy backfill (${{ inputs.days }} days) @ $STAMP [skip ci]"
           git push origin HEAD:data
