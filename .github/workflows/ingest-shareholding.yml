@@ -1,21 +1,29 @@
 name: Ingest shareholding (BSE)
 
 # Pulls quarterly shareholding patterns from BSE for the watch universe.
-# Companies file shareholding within 45 days of quarter end, so this
+# Companies file shareholding within ~30 days of quarter end, so this
 # runs weekly on Saturday to catch any newly filed quarters.
+#
+# Universe tiers (configurable via workflow_dispatch input or
+# HOLDINGDASH_UNIVERSE env var):
+#   NIFTY50   ~50 companies × 20 quarters ≈ 7 min
+#   NIFTY100  ~100 × 20 ≈ 15 min
+#   NIFTY200  ~200 × 20 ≈ 27 min
+#   NIFTY500  ~500 × 20 ≈ 67 min   (default — fits comfortably in 90 min budget)
+#   ALL       ~2000 × 20 ≈ 4.5 hr  (overflows; run via parallel matrix later)
 on:
   schedule:
     - cron: '0 4 * * 6'  # Sat 04:00 UTC
   workflow_dispatch:
     inputs:
-      symbols:
-        description: 'Comma-separated NSE symbols (default NIFTY 50)'
+      universe:
+        description: 'NIFTY50 | NIFTY100 | NIFTY200 | NIFTY500 | ALL | comma-list'
         required: false
-        default: ''
+        default: 'NIFTY500'
       quarters:
-        description: 'Quarter-ends to pull (default 8)'
+        description: 'Quarter-ends to pull (default 20 = 5 years)'
         required: false
-        default: '8'
+        default: '20'
 
 permissions:
   contents: write
@@ -27,9 +35,10 @@ concurrency:
 jobs:
   shareholding:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       OUT_DIR: ${{ github.workspace }}/data-out
+      HOLDINGDASH_UNIVERSE: ${{ inputs.universe || 'NIFTY500' }}
     steps:
       - name: Checkout source (main)
         uses: actions/checkout@v4
@@ -72,13 +81,11 @@ jobs:
       - name: Fetch shareholding patterns
         working-directory: source
         run: |
-          if [ -n "${{ inputs.symbols }}" ]; then
-            python -m ingestion.scripts.fetch_shareholding --symbols "${{ inputs.symbols }}" --quarters ${{ inputs.quarters }}
-          else
-            python -m ingestion.scripts.fetch_shareholding --quarters ${{ inputs.quarters }}
-          fi
+          python -m ingestion.scripts.fetch_shareholding \
+            --symbols "${HOLDINGDASH_UNIVERSE}" \
+            --quarters ${{ inputs.quarters || 20 }}
 
-      - name: Aggregate per-ticker rollups
+      - name: Aggregate per-ticker rollups (quarterly + yearly)
         working-directory: source
         run: python -m ingestion.scripts.aggregate_per_ticker
 

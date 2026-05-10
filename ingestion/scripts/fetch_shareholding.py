@@ -1,19 +1,24 @@
 """Fetch shareholding patterns from BSE for a list of companies.
 
-For each company in the watchlist, pull the latest N quarterly
+For each company in the watch universe, pull the latest N quarterly
 shareholding patterns from BSE's public API. The pattern breaks
 ownership down by Promoter / FII / DII / Public / etc.
 
 Source: https://api.bseindia.com/BseIndiaAPI/api/ShareHoldingPatternData/w
-  Params: ScripCd, qtrid (YYYYMMDD of quarter-end)
+  Params: scripcd, qtrid (YYYYMMDD of quarter-end)
 
-Universe scope is configurable. Default is NIFTY 50 for first run
-(50 companies × 8 quarters ~ 400 calls, ~5-10 min). Set
-HOLDINGDASH_UNIVERSE=NIFTY500 to expand.
+Universe is configurable via:
+  --symbols NIFTY50 | NIFTY100 | NIFTY200 | NIFTY500 | ALL | "SYM1,SYM2,..."
+  HOLDINGDASH_UNIVERSE env var (same values)
+
+Default: NIFTY500 (matches the weekly cron's intended tier).
+
+Default quarters: 20 (= 5 years, matches the Overview chart depth).
 
 Output:
   shareholding/{SYMBOL}/{YYYY-MM-DD}.json    # one file per quarter
-  by_ticker/{SYMBOL}/shareholding.json       # rollup
+  by_ticker/{SYMBOL}/shareholding.json       # quarterly rollup
+  by_ticker/{SYMBOL}/shareholding_yearly.json (via aggregator)
 """
 from __future__ import annotations
 
@@ -31,43 +36,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ingestion.utils.bse import make_bse_session  # noqa: E402
 from ingestion.utils.storage import read_json, write_json, log  # noqa: E402
+from ingestion.utils.universe import resolve as resolve_universe  # noqa: E402
 
 API_URL = "https://api.bseindia.com/BseIndiaAPI/api/ShareHoldingPatternData/w"
-
-# Default starter universe (NIFTY 50 by symbol). Expand via env or arg.
-NIFTY_50: list[str] = [
-    "RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", "BHARTIARTL", "ITC",
-    "SBIN", "HINDUNILVR", "LT", "BAJFINANCE", "AXISBANK", "KOTAKBANK", "HCLTECH",
-    "MARUTI", "ASIANPAINT", "SUNPHARMA", "TITAN", "NTPC", "POWERGRID", "WIPRO",
-    "ULTRACEMCO", "M&M", "TATAMOTORS", "TATASTEEL", "NESTLEIND", "JSWSTEEL",
-    "ONGC", "GRASIM", "INDUSINDBK", "ADANIENT", "ADANIPORTS", "COALINDIA",
-    "DIVISLAB", "TECHM", "BAJAJFINSV", "BPCL", "HDFCLIFE", "SBILIFE", "HEROMOTOCO",
-    "CIPLA", "BRITANNIA", "EICHERMOT", "DRREDDY", "APOLLOHOSP", "TATACONSUM",
-    "BAJAJ-AUTO", "LTIM", "HINDALCO", "UPL",
-]
 
 
 def quarter_ends(n: int) -> list[date]:
     """Return the last n quarter-end dates ending in the most recently
-    completed quarter. Indian financial year quarters end Mar/Jun/Sep/Dec."""
+    completed quarter. Indian financial year quarters end Mar/Jun/Sep/Dec.
+    Companies file shareholding pattern ~21-45 days after quarter end.
+    """
     today = date.today()
-    # Find most recently completed quarter end
-    year = today.year
-    candidates = [
-        date(year, 3, 31),
-        date(year, 6, 30),
-        date(year, 9, 30),
-        date(year, 12, 31),
-    ]
-    # Most recent quarter end that is at most 45 days before today
-    # (companies file ~45 days after quarter end)
-    candidates_back = []
-    y = year
-    while len(candidates_back) < n + 2:
+    candidates_back: list[date] = []
+    y = today.year + 1  # start above today and walk back
+    while len(candidates_back) < n + 4:
         for q in [date(y, 12, 31), date(y, 9, 30), date(y, 6, 30), date(y, 3, 31)]:
-            if (today - q).days >= 45:
+            # Allow ~30 days slack for prompt filings
+            if (today - q).days >= 30:
                 candidates_back.append(q)
         y -= 1
+        if y < 1990:
+            break
     return candidates_back[:n]
 
 
@@ -79,11 +68,7 @@ def _safe_float(v: Any, default: float = 0.0) -> float:
 
 
 def _extract_categories(payload: dict[str, Any]) -> dict[str, float]:
-    """Map BSE shareholding payload to flat Promoter/FII/DII/Public buckets.
-
-    BSE returns 30+ rows by sub-category. We aggregate them into the four
-    canonical buckets the dashboard cares about.
-    """
+    """Aggregate BSE's 30+ sub-categories into Promoter / FII / DII / Public."""
     out = {"promoter": 0.0, "fii": 0.0, "dii": 0.0, "public": 0.0}
     table = payload.get("Table") if isinstance(payload, dict) else None
     if not isinstance(table, list):
@@ -91,29 +76,38 @@ def _extract_categories(payload: dict[str, Any]) -> dict[str, float]:
     for row in table:
         if not isinstance(row, dict):
             continue
-        cat = str(row.get("HOLDER_CATEGORY") or row.get("ShareholderCategory") or "").lower()
-        pct = _safe_float(row.get("PER_SHR_HOLD") or row.get("Per_Total_Holding"))
+        cat = str(
+            row.get("HOLDER_CATEGORY")
+            or row.get("ShareholderCategory")
+            or row.get("CATEGORY")
+            or ""
+        ).lower()
+        pct = _safe_float(
+            row.get("PER_SHR_HOLD")
+            or row.get("Per_Total_Holding")
+            or row.get("PercentageOfShareholding")
+            or row.get("PERCENT_OF_HOLDING")
+        )
         if "promoter" in cat:
             out["promoter"] += pct
-        elif "foreign" in cat or "fpi" in cat or "fii" in cat:
+        elif "foreign" in cat or "fpi" in cat or "fii" in cat or "non-resident" in cat:
             out["fii"] += pct
         elif (
             "mutual" in cat
             or "insurance" in cat
             or "domestic institution" in cat
             or "banks" in cat
-            or "financial" in cat
+            or "financial institutions" in cat
+            or "venture capital" in cat
+            or "alternative investment" in cat
         ):
             out["dii"] += pct
-        elif "public" in cat or "retail" in cat or "non-institution" in cat:
+        elif "public" in cat or "retail" in cat or "non-institution" in cat or "individual" in cat:
             out["public"] += pct
-    # Round to 2 dp
     return {k: round(v, 2) for k, v in out.items()}
 
 
-def fetch_one(
-    session: requests.Session, scrip_code: str, qtr_end: date
-) -> dict[str, Any] | None:
+def fetch_one(session: requests.Session, scrip_code: str, qtr_end: date) -> dict[str, Any] | None:
     qtrid = qtr_end.strftime("%Y%m%d")
     params = {"scripcd": scrip_code, "qtrid": qtrid}
     try:
@@ -135,42 +129,48 @@ def fetch_one(
         return None
 
 
-def resolve_universe(arg: str | None) -> list[str]:
-    if arg and arg.upper() != "NIFTY50":
-        # let user pass a comma-separated list
-        return [s.strip().upper() for s in arg.split(",") if s.strip()]
-    env = os.environ.get("HOLDINGDASH_UNIVERSE", "").upper()
-    if env == "NIFTY500":
-        # fall back to NIFTY 50 if NSE NIFTY500 file isn't fetched yet
-        log("NIFTY500 universe not yet supported, falling back to NIFTY 50")
-    return NIFTY_50
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbols", help="Comma-separated NSE symbols (default NIFTY 50)")
-    parser.add_argument("--quarters", type=int, default=8, help="Last N quarter-ends to fetch")
+    parser.add_argument(
+        "--symbols",
+        help="NIFTY50 | NIFTY100 | NIFTY200 | NIFTY500 | ALL | comma-separated (default NIFTY500)",
+    )
+    parser.add_argument(
+        "--quarters",
+        type=int,
+        default=20,
+        help="Last N quarter-ends to fetch (default 20 = 5 years)",
+    )
     parser.add_argument("--delay", type=float, default=0.4, help="Delay between calls")
     args = parser.parse_args()
 
     nse_to_bse_payload = read_json("nse_to_bse.json", default=None)
-    if not nse_to_bse_payload or "mapping" not in nse_to_bse_payload:
-        log("fetch_shareholding: nse_to_bse.json missing — run fetch_bse_master first")
+    if not nse_to_bse_payload or not nse_to_bse_payload.get("mapping"):
+        log("fetch_shareholding: nse_to_bse.json missing or empty — run fetch_bse_master first")
         return 2
     mapping: dict[str, str] = nse_to_bse_payload["mapping"]
 
-    universe = resolve_universe(args.symbols)
+    universe_spec = args.symbols or os.environ.get("HOLDINGDASH_UNIVERSE") or "NIFTY500"
+    equity_master = read_json("equity_master.json", default=None)
+    universe = resolve_universe(universe_spec, equity_master)
+    if not universe:
+        log(f"fetch_shareholding: empty universe for spec '{universe_spec}'")
+        return 2
     quarters = quarter_ends(args.quarters)
-    log(f"fetch_shareholding: {len(universe)} symbols × {len(quarters)} quarters")
+    log(
+        f"fetch_shareholding: universe='{universe_spec}' ({len(universe)} symbols) "
+        f"× {len(quarters)} quarters"
+    )
 
     session = make_bse_session()
     total_hits = 0
     total_misses = 0
+    matched = 0
     for symbol in universe:
         scrip = mapping.get(symbol)
         if not scrip:
-            log(f"fetch_shareholding:   skip {symbol} (no BSE code)")
             continue
+        matched += 1
         rows: list[dict[str, Any]] = []
         for q in quarters:
             data = fetch_one(session, scrip, q)
@@ -193,9 +193,11 @@ def main() -> int:
                     "quarters": rows,
                 },
             )
-            log(f"fetch_shareholding:   ok {symbol} ({len(rows)} quarters)")
 
-    log(f"fetch_shareholding: done — {total_hits} hits, {total_misses} misses")
+    log(
+        f"fetch_shareholding: done — {matched}/{len(universe)} symbols had BSE codes, "
+        f"{total_hits} quarter hits, {total_misses} misses"
+    )
     return 0
 
 
