@@ -1,0 +1,74 @@
+name: Ingest weekly (equity master)
+
+# Refresh the company master every Sunday 02:00 UTC.
+on:
+  schedule:
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ingest-weekly
+  cancel-in-progress: false
+
+jobs:
+  master:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OUT_DIR: ${{ github.workspace }}/data-out
+    steps:
+      - name: Checkout source (main)
+        uses: actions/checkout@v4
+        with:
+          path: source
+          ref: main
+
+      - name: Checkout data branch
+        uses: actions/checkout@v4
+        with:
+          path: data-out
+          ref: data
+          fetch-depth: 1
+        continue-on-error: true
+
+      - name: Init data branch if missing
+        run: |
+          if [ ! -d "${{ github.workspace }}/data-out/.git" ]; then
+            mkdir -p "${{ github.workspace }}/data-out"
+            cd "${{ github.workspace }}/data-out"
+            git init -b data
+            git remote add origin "https://github.com/${{ github.repository }}.git"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: source/ingestion/requirements.txt
+
+      - name: Install deps
+        working-directory: source
+        run: pip install -r ingestion/requirements.txt
+
+      - name: Fetch equity master
+        working-directory: source
+        run: python -m ingestion.scripts.fetch_equity_master
+
+      - name: Commit + push
+        working-directory: data-out
+        run: |
+          set -e
+          git config user.name "holdingdash-bot"
+          git config user.email "bot@holdingdash.local"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          git add -A
+          git commit -m "Weekly master refresh @ $STAMP"
+          git push origin HEAD:data

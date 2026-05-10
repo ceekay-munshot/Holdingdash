@@ -1,0 +1,91 @@
+name: Ingest daily (prices, insider, deals)
+
+# Runs every weekday at 14:00 UTC (~19:30 IST), well after Indian market close.
+# Plus a manual trigger for backfills / debugging.
+on:
+  schedule:
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ingest-daily
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OUT_DIR: ${{ github.workspace }}/data-out
+    steps:
+      - name: Checkout source (main)
+        uses: actions/checkout@v4
+        with:
+          path: source
+          ref: main
+
+      - name: Checkout data branch
+        uses: actions/checkout@v4
+        with:
+          path: data-out
+          ref: data
+          fetch-depth: 1
+        continue-on-error: true
+
+      - name: Init data branch if missing
+        run: |
+          if [ ! -d "${{ github.workspace }}/data-out/.git" ]; then
+            echo "Initialising orphan data branch ..."
+            mkdir -p "${{ github.workspace }}/data-out"
+            cd "${{ github.workspace }}/data-out"
+            git init -b data
+            git remote add origin "https://github.com/${{ github.repository }}.git"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: source/ingestion/requirements.txt
+
+      - name: Install deps
+        working-directory: source
+        run: pip install -r ingestion/requirements.txt
+
+      - name: Fetch bhavcopy (prices)
+        working-directory: source
+        run: python -m ingestion.scripts.fetch_bhavcopy
+        continue-on-error: true
+
+      - name: Fetch bulk + block deals
+        working-directory: source
+        run: python -m ingestion.scripts.fetch_deals
+        continue-on-error: true
+
+      - name: Fetch insider trades
+        working-directory: source
+        run: python -m ingestion.scripts.fetch_insider
+        continue-on-error: true
+
+      - name: Aggregate per-ticker rollups
+        working-directory: source
+        run: python -m ingestion.scripts.aggregate_per_ticker
+
+      - name: Commit + push to data branch
+        working-directory: data-out
+        run: |
+          set -e
+          git config user.name "holdingdash-bot"
+          git config user.email "bot@holdingdash.local"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          git add -A
+          git commit -m "Daily ingest @ $STAMP"
+          git push origin HEAD:data
