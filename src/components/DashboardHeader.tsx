@@ -1,4 +1,4 @@
-import { TrendingUp, ArrowLeft, FileSpreadsheet, FileText } from 'lucide-react'
+import { TrendingUp, ArrowLeft, FileSpreadsheet, FileText, Sparkles } from 'lucide-react'
 import type { Company } from '../types'
 
 interface Props {
@@ -6,9 +6,10 @@ interface Props {
   onBack: () => void
   onExportExcel: () => void
   onExportPdf: () => void
+  onOpenVerdict: () => void
 }
 
-export default function DashboardHeader({ company, onBack, onExportExcel, onExportPdf }: Props) {
+export default function DashboardHeader({ company, onBack, onExportExcel, onExportPdf, onOpenVerdict }: Props) {
   return (
     <header className="sticky top-0 z-20 border-b border-ink-100 bg-white/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3.5">
@@ -48,8 +49,17 @@ export default function DashboardHeader({ company, onBack, onExportExcel, onExpo
           </div>
         </div>
 
-        {/* right - exports */}
+        {/* right - actions */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={onOpenVerdict}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-glow"
+            title="Investment verdict — cross-tab synthesis"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Investment Verdict
+          </button>
+          <div className="hidden h-6 w-px bg-ink-200 md:block" />
           <button onClick={onExportExcel} className="btn-ghost">
             <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
             Export Excel
