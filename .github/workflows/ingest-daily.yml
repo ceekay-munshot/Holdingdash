@@ -87,5 +87,5 @@ jobs:
           fi
           STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
           git add -A
-          git commit -m "Daily ingest @ $STAMP"
+          git commit -m "Daily ingest @ $STAMP [skip ci]"
           git push origin HEAD:data
