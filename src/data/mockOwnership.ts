@@ -45,8 +45,33 @@ function seeded(seed: string, i: number): number {
   return x - Math.floor(x) // 0..1
 }
 
+/**
+ * Synthesise a plausible ownership profile from a ticker. Used when the
+ * ticker isn't in our hand-curated `profiles` dict — keeps every NSE-listed
+ * company looking distinct on the dashboard.
+ */
+function profileFromTicker(ticker: string): Profile {
+  const r = (i: number) => seeded(ticker + 'prof', i)
+  // pick a promoter level: most Indian companies sit 35-65%
+  const promoter = +(35 + r(0) * 30).toFixed(2)
+  // FII share usually 5-30%
+  const fii = +(5 + r(1) * 22).toFixed(2)
+  // DII share usually 5-25%
+  const dii = +(5 + r(2) * 18).toFixed(2)
+  // drift can be small, biased toward DII accumulation
+  return {
+    promoter,
+    fii,
+    dii,
+    promoterDrift: (r(3) - 0.5) * 0.06,
+    fiiDrift: (r(4) - 0.55) * 0.25,
+    diiDrift: 0.05 + r(5) * 0.25,
+    noise: 0.15 + r(6) * 0.12,
+  }
+}
+
 export function getOwnership20q(ticker: string): OwnershipQuarter[] {
-  const p = profiles[ticker] ?? profiles['RELIANCE.NS']
+  const p = profiles[ticker] ?? profileFromTicker(ticker)
   return QUARTERS.map((quarter, i) => {
     const noise = (seeded(ticker, i) - 0.5) * 2 * p.noise
     const noise2 = (seeded(ticker + 'b', i) - 0.5) * 2 * p.noise

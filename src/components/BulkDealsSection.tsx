@@ -6,6 +6,7 @@ import {
   LogOut,
   Repeat,
   Sparkles,
+  Wifi,
   Zap,
 } from 'lucide-react'
 import {
@@ -25,6 +26,7 @@ import type { BulkBlockDeal, DealSignal, DealType } from '../types'
 interface Props {
   deals: BulkBlockDeal[]
   read: string
+  live?: boolean
 }
 
 const SIGNAL_STYLE: Record<
@@ -71,7 +73,7 @@ const DEAL_TYPE_STYLE: Record<DealType, string> = {
 type FilterKey = 'All' | 'Block' | 'Bulk' | 'Accumulation' | 'Exit'
 const FILTERS: FilterKey[] = ['All', 'Block', 'Bulk', 'Accumulation', 'Exit']
 
-export default function BulkDealsSection({ deals, read }: Props) {
+export default function BulkDealsSection({ deals, read, live }: Props) {
   const [filter, setFilter] = useState<FilterKey>('All')
 
   const filtered = useMemo(() => {
@@ -109,8 +111,16 @@ export default function BulkDealsSection({ deals, read }: Props) {
     <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-            Bulk & block deals · last 6 months
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+              Bulk & block deals · {live ? 'last 7 trading days' : 'last 6 months'}
+            </div>
+            {live && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                <Wifi className="h-3 w-3" />
+                Live
+              </span>
+            )}
           </div>
           <h3 className="text-lg font-semibold text-ink-900">
             Who is accumulating, who is exiting?

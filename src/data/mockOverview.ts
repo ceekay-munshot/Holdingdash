@@ -246,8 +246,82 @@ function sparkFromOwnership(o: { dii: number }[]): number[] {
   return o.slice(-10).map((q) => q.dii)
 }
 
+// Seeded deterministic random for generic fallback narratives
+function seed01(ticker: string, i: number): number {
+  let h = 0
+  for (let c = 0; c < ticker.length; c++) h = (h * 31 + ticker.charCodeAt(c)) | 0
+  const x = Math.sin((h + i) * 9301 + 49297) * 233280
+  return x - Math.floor(x)
+}
+
+function genericStory(ticker: string): Story {
+  const r = (i: number) => seed01(ticker, i)
+  // pick a signal based on a seeded score
+  const score = r(0)
+  const signal: SignalLevel = score > 0.7 ? 'Positive' : score > 0.4 ? 'Watch' : score > 0.15 ? 'Risky' : 'Red Flag'
+  const trend: TrendDirection = score > 0.6 ? 'Improving' : score > 0.3 ? 'Stable' : 'Weakening'
+  const tone =
+    signal === 'Positive'
+      ? 'constructive'
+      : signal === 'Watch'
+      ? 'mixed'
+      : 'soft'
+  return {
+    signal,
+    trend,
+    oneLiner: `Ownership picture is ${tone} based on a generic preview — narrative-specific reads land as more data backfills for this ticker.`,
+    ownershipTrendRead:
+      trend === 'Improving'
+        ? 'DII accumulation visible across recent quarters'
+        : trend === 'Weakening'
+        ? 'FII trimming has been the dominant flow recently'
+        : 'Ownership composition has been broadly stable',
+    holderMovementRead:
+      'Institutional breadth movement is moderate — track top accumulator vs top reducer',
+    insiderDealsRead:
+      'Insider activity is in line with sector norms — no cluster signal flagged',
+    governanceRead:
+      signal === 'Positive'
+        ? 'Governance markers are in the comfort zone'
+        : 'Governance markers warrant a quick review before sizing up',
+    recent: {
+      positive: 'DII accumulation visible in recent quarters',
+      negative: 'FII positioning has been two-way',
+      unusual: 'Generic ownership preview — full narrative on the way',
+    },
+    buySideRead: `Ownership story for ${ticker.replace('.NS', '')} is rendered from a generic preview profile. As we ingest more shareholding history and curated narratives, the read will sharpen. Use the live prices and deals overlay for near-term context.`,
+    topAccumulator: {
+      name: 'LIC of India',
+      type: 'Insurance',
+      changePct: +(0.10 + r(1) * 0.45).toFixed(2),
+      currentPct: +(1.5 + r(2) * 4).toFixed(2),
+    },
+    topReducer: {
+      name: 'Vanguard Group',
+      type: 'FII',
+      changePct: -+(0.10 + r(3) * 0.35).toFixed(2),
+      currentPct: +(0.8 + r(4) * 2).toFixed(2),
+    },
+    newEntries: Math.round(8 + r(5) * 18),
+    exits: Math.round(6 + r(6) * 14),
+    breadth: Math.round(700 + r(7) * 900),
+    breadthChange: Math.round((r(8) - 0.4) * 28),
+    insiderSignal: r(9) > 0.7 ? 'Routine' : r(9) > 0.3 ? 'Routine' : 'Mixed',
+    insiderBuy: +(r(10) * 6).toFixed(1),
+    insiderSell: +(2 + r(11) * 16).toFixed(1),
+    bulkNet: Math.round((r(12) - 0.5) * 120),
+    blockNet: Math.round((r(13) - 0.5) * 80),
+    riskLevel: signal === 'Positive' ? 'Low' : signal === 'Watch' ? 'Medium' : 'High',
+    rptPct: +(2 + r(14) * 6).toFixed(1),
+    rptYoy: +((r(15) - 0.5) * 1.4).toFixed(1),
+    auditorChanges: 0,
+    pledgePct: 0,
+    pledgeChange: 0,
+  }
+}
+
 export function getOverview(ticker: string): CompanyOverview {
-  const story = stories[ticker] ?? stories['RELIANCE.NS']
+  const story = stories[ticker] ?? genericStory(ticker)
   const ownership = getOwnership20q(ticker)
   return {
     signal: {

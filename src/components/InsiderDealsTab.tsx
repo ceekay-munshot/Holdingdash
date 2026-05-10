@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,20 +9,26 @@ import {
   TrendingDown,
   TrendingUp,
   VolumeX,
+  Wifi,
   X,
 } from 'lucide-react'
 import type {
+  BulkBlockDeal,
   InsiderDealsData,
   InsiderHorizon,
   InsiderSignal,
   InsiderSignalCard,
+  PricePoint,
 } from '../types'
 import InsiderTimelineChart from './InsiderTimelineChart'
 import InsiderTransactionTable from './InsiderTransactionTable'
 import BulkDealsSection from './BulkDealsSection'
+import type { LiveDealsBundle, LivePriceHistory } from '../lib/liveData'
 
 interface Props {
   data: InsiderDealsData
+  livePrices?: LivePriceHistory | null
+  liveDeals?: LiveDealsBundle | null
 }
 
 const SIGNAL_CHROME: Record<
@@ -83,20 +89,68 @@ const CARD_TONE = {
 
 const HORIZONS: InsiderHorizon[] = ['1Y', '2Y', '5Y', '10Y', 'Max']
 
-export default function InsiderDealsTab({ data }: Props) {
+export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) {
   const { summary, pricePoints, trades, deals, dealsRead } = data
   const [horizon, setHorizon] = useState<InsiderHorizon>('5Y')
   const [activeCard, setActiveCard] = useState<InsiderSignalCard | null>(null)
   const chrome = SIGNAL_CHROME[summary.signal]
   const SignalIcon = chrome.icon
 
+  // Prefer live prices when we have them, fall back to mock
+  const effectivePrices: PricePoint[] = useMemo(() => {
+    if (livePrices && livePrices.rows.length >= 20) {
+      return livePrices.rows.map((r) => ({ date: r.date, price: r.close }))
+    }
+    return pricePoints
+  }, [livePrices, pricePoints])
+
+  const liveDealsCount =
+    (liveDeals?.bulk?.rows?.length ?? 0) + (liveDeals?.block?.rows?.length ?? 0)
+  const effectiveDeals: BulkBlockDeal[] = useMemo(() => {
+    if (!liveDeals || liveDealsCount === 0) return deals
+    const merged: BulkBlockDeal[] = []
+    for (const r of liveDeals.bulk.rows) {
+      merged.push({
+        date: r.date ?? '',
+        buyer: r.buySell === 'BUY' ? r.clientName : 'Open Market',
+        seller: r.buySell === 'SELL' ? r.clientName : 'Open Market',
+        dealType: 'Bulk',
+        value: r.value,
+        premiumPct: 0,
+        signal: classifyDealSignal(r.clientName, r.buySell, r.value),
+      })
+    }
+    for (const r of liveDeals.block.rows) {
+      merged.push({
+        date: r.date ?? '',
+        buyer: r.buySell === 'BUY' ? r.clientName : 'Open Market',
+        seller: r.buySell === 'SELL' ? r.clientName : 'Open Market',
+        dealType: 'Block',
+        value: r.value,
+        premiumPct: 0,
+        signal: classifyDealSignal(r.clientName, r.buySell, r.value),
+      })
+    }
+    merged.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    return merged.slice(0, 12)
+  }, [liveDeals, liveDealsCount, deals])
+
+  const usingLivePrices = livePrices && livePrices.rows.length >= 20
+  const usingLiveDeals = liveDealsCount > 0
+  const effectiveDealsRead = usingLiveDeals
+    ? `Live · ${liveDealsCount} bulk / block deals over the last 7 trading days from NSE archives.`
+    : dealsRead
+
   // annotation tied to horizon
-  const annotation =
+  const baseAnnotation =
     horizon === '1Y'
       ? 'Last 12 months: ' + summary.oneLiner
       : horizon === '10Y' || horizon === 'Max'
       ? 'Long view shows insider activity through multiple cycles. Look for buy clusters near drawdowns and sell clusters near peaks.'
       : 'Mid-horizon view balances near-term clusters with longer-term pattern.'
+  const annotation = usingLivePrices
+    ? `${baseAnnotation} Price line is live from NSE bhavcopy.`
+    : baseAnnotation
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-6 py-6">
@@ -171,10 +225,18 @@ export default function InsiderDealsTab({ data }: Props) {
 
         <InsiderTimelineChart
           horizon={horizon}
-          pricePoints={pricePoints}
+          pricePoints={effectivePrices}
           trades={trades}
           annotation={annotation}
         />
+        {usingLivePrices && (
+          <div className="flex items-center justify-end">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-700">
+              <Wifi className="h-3 w-3" />
+              Live · NSE bhavcopy ({livePrices!.rows.length} rows)
+            </span>
+          </div>
+        )}
       </section>
 
       {/* === 4. SIGNAL CARDS === */}
@@ -219,7 +281,7 @@ export default function InsiderDealsTab({ data }: Props) {
       </section>
 
       {/* === 6. BULK / BLOCK DEALS === */}
-      <BulkDealsSection deals={deals} read={dealsRead} />
+      <BulkDealsSection deals={effectiveDeals} read={effectiveDealsRead} live={usingLiveDeals} />
 
       {/* === 7. FINAL READ === */}
       <section className="relative overflow-hidden rounded-3xl border border-ink-100 bg-gradient-to-br from-ink-50 to-white p-6 md:p-8 shadow-card animate-fadeUp">
@@ -259,6 +321,23 @@ export default function InsiderDealsTab({ data }: Props) {
       )}
     </div>
   )
+}
+
+/* ===== helpers ===== */
+
+function classifyDealSignal(
+  clientName: string,
+  buySell: string,
+  valueCr: number,
+): BulkBlockDeal['signal'] {
+  const lower = clientName.toLowerCase()
+  const institutional = /mutual|insurance|investments|capital|life|pension|holdings|asset|fund/i.test(lower)
+  const isBuy = buySell === 'BUY'
+  if (institutional && isBuy && valueCr >= 25) return 'Institutional Accumulation'
+  if (institutional && !isBuy && valueCr >= 25) return 'Large Exit'
+  if (valueCr >= 50) return 'Churn'
+  if (valueCr >= 10) return 'Neutral'
+  return 'Neutral'
 }
 
 /* ===== sub-components ===== */
