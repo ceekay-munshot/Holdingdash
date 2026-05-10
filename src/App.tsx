@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
-import { LineChart as LineChartIcon, ArrowLeftRight, ShieldAlert } from 'lucide-react'
+import { ArrowLeftRight, ShieldAlert } from 'lucide-react'
 import './App.css'
 import CompanyLaunchPanel from './components/CompanyLaunchPanel'
 import LoadingProgress from './components/LoadingProgress'
 import DashboardHeader from './components/DashboardHeader'
 import TabNavigation from './components/TabNavigation'
 import OverviewTab from './components/OverviewTab'
+import OwnershipTrendsTab from './components/OwnershipTrendsTab'
 import PlaceholderTab from './components/PlaceholderTab'
 import { getOverview } from './data/mockOverview'
+import { getOwnershipTrends } from './data/mockHolders'
 import type { Company, TabKey } from './types'
 
 type Stage = 'select' | 'loading' | 'dashboard'
@@ -18,6 +20,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
 
   const overview = useMemo(() => (company ? getOverview(company.ticker) : null), [company])
+  const trends = useMemo(() => (company ? getOwnershipTrends(company.ticker) : null), [company])
 
   function handleLaunch(c: Company) {
     setCompany(c)
@@ -53,7 +56,7 @@ export default function App() {
   if (stage === 'loading' && company) {
     return <LoadingProgress company={company} onDone={handleLoadDone} />
   }
-  if (stage === 'dashboard' && company && overview) {
+  if (stage === 'dashboard' && company && overview && trends) {
     return (
       <div className="min-h-screen bg-ink-50/50">
         <DashboardHeader
@@ -68,11 +71,7 @@ export default function App() {
             <OverviewTab overview={overview} onJumpTab={setActiveTab} />
           )}
           {activeTab === 'trends' && (
-            <PlaceholderTab
-              tab="trends"
-              icon={LineChartIcon}
-              onBackToOverview={() => setActiveTab('overview')}
-            />
+            <OwnershipTrendsTab overview={overview} trends={trends} />
           )}
           {activeTab === 'insider' && (
             <PlaceholderTab
