@@ -64,7 +64,7 @@ export interface InsiderDealsSummary {
   monthlyFlow: { month: string; buy: number; sell: number }[]
 }
 
-export interface GovernanceSummary {
+export interface OverviewGovernanceSummary {
   riskLevel: 'Low' | 'Medium' | 'High'
   rptToRevenuePct: number
   rptYoyChange: number // pp change
@@ -79,7 +79,7 @@ export interface CompanyOverview {
   ownership20q: OwnershipQuarter[]
   holderMovement: HolderMovementSummary
   insiderDeals: InsiderDealsSummary
-  governance: GovernanceSummary
+  governance: OverviewGovernanceSummary
 }
 
 export type TabKey = 'overview' | 'trends' | 'insider' | 'governance'
@@ -233,4 +233,97 @@ export interface InsiderDealsData {
   trades: InsiderTrade[] // 10y span
   deals: BulkBlockDeal[]
   dealsRead: string
+}
+
+/* ========== Governance Risk tab ========== */
+
+export type GovernanceSignal = 'Low Risk' | 'Watch' | 'High Risk' | 'Red Flag'
+
+export type RPTSignal =
+  | 'Normal'
+  | 'Watch'
+  | 'Rising Fast'
+  | 'Concentrated'
+  | 'High Risk'
+
+export type RPTRelationship =
+  | 'Subsidiary'
+  | 'Joint Venture'
+  | 'Associate'
+  | 'KMP / Director'
+  | 'Holding Company'
+  | 'Promoter Entity'
+  | 'Common Director'
+
+export type RPTTransactionType =
+  | 'Goods Sale'
+  | 'Goods Purchase'
+  | 'Service Income'
+  | 'Service Expense'
+  | 'Loan Given'
+  | 'Loan Taken'
+  | 'Investment'
+  | 'Royalty'
+  | 'Lease'
+
+export interface RPTTrendPoint {
+  period: string // e.g. "FY21"
+  rpt: number // INR Cr
+  revenue: number // INR Cr
+  rptPctRevenue: number // %
+  rptYoy: number // % YoY change
+  revenueYoy: number // % YoY change
+  outpacing: boolean // RPT YoY > revenue YoY
+}
+
+export interface RelatedPartyTransaction {
+  counterparty: string
+  relationship: RPTRelationship
+  transactionType: RPTTransactionType
+  currentValue: number // INR Cr
+  prevValue: number // INR Cr
+  changePct: number
+  balanceOutstanding: number // INR Cr
+  signal: RPTSignal
+}
+
+export interface GovernanceCard {
+  key: 'rptGrowth' | 'rptShare' | 'receivables' | 'concentration'
+  label: string
+  value: string
+  read: string
+  tone: 'positive' | 'neutral' | 'watch' | 'risky'
+}
+
+export interface GovernanceTrendStripItem {
+  key: 'rptIntensity' | 'outstandingBalance' | 'concentration' | 'disclosureQuality'
+  label: string
+  direction: 'Improving' | 'Stable' | 'Worsening'
+  read: string
+}
+
+export interface GovernanceSummary {
+  signal: GovernanceSignal
+  oneLiner: string
+  mainPositive: string
+  mainConcern: string
+  finalRead: string
+  cards: GovernanceCard[]
+  strip: GovernanceTrendStripItem[]
+}
+
+export interface RPTFlowEntry {
+  flavor: 'largest_txn' | 'largest_balance' | 'fastest_growing'
+  counterparty: string
+  relationship: RPTRelationship
+  transactionType: RPTTransactionType
+  value: number // INR Cr
+  caption: string
+}
+
+export interface GovernanceData {
+  summary: GovernanceSummary
+  trend: RPTTrendPoint[]
+  parties: RelatedPartyTransaction[]
+  flows: RPTFlowEntry[]
 }
