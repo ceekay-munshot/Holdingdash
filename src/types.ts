@@ -92,3 +92,60 @@ export interface InsightDrawerData {
   buySideNote: string
   chartType: 'ownership' | 'holderBars' | 'insiderFlow' | 'rptArea'
 }
+
+/* ========== Ownership Trends tab ========== */
+
+export type HolderType = 'Promoter' | 'FII' | 'DII' | 'MF' | 'Insurance' | 'Individual'
+
+export type HolderSignal =
+  | 'Accumulating'
+  | 'Reducing'
+  | 'Stable'
+  | 'New Entry'
+  | 'Exited'
+  | 'Watch'
+
+export interface HolderRow {
+  name: string
+  type: HolderType
+  prevPct: number | null // null when New Entry
+  currPct: number | null // null when Exited
+  changePct: number // for Exited treat as -prevPct, for New Entry as +currPct
+  signal: HolderSignal
+}
+
+export type HeatmapBucket = 'Promoter' | 'FII' | 'DII' | 'Public' | 'Individual / Others'
+
+export interface HeatmapCell {
+  delta: number // pp change
+  state: 'up' | 'down' | 'stable' | 'watch'
+}
+
+export interface HeatmapRow {
+  bucket: HeatmapBucket
+  cells: HeatmapCell[] // length = quarters provided
+}
+
+export interface BreadthPoint {
+  quarter: string
+  newEntries: number
+  exits: number
+  net: number
+}
+
+export interface OwnershipTrendsStory {
+  status: 'Improving' | 'Stable' | 'Weakening' | 'Risky'
+  oneLiner: string
+  positiveChange: string
+  riskChange: string
+  trendAnnotation: string
+  breadthRead: string
+  finalRead: string
+}
+
+export interface OwnershipTrendsData {
+  story: OwnershipTrendsStory
+  heatmap: { quarters: string[]; rows: HeatmapRow[] }
+  holders: HolderRow[]
+  breadth: BreadthPoint[]
+}
