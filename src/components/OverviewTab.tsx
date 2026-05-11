@@ -42,6 +42,8 @@ import DataBadge from './DataBadge'
 interface Props {
   overview: CompanyOverview
   onJumpTab: (tab: TabKey) => void
+  shareholdingLive?: boolean
+  shareholdingSource?: string
 }
 
 const signalChrome: Record<
@@ -92,7 +94,7 @@ const trendIcon = {
   Weakening: TrendingDown,
 }
 
-export default function OverviewTab({ overview, onJumpTab }: Props) {
+export default function OverviewTab({ overview, onJumpTab, shareholdingLive, shareholdingSource }: Props) {
   const { signal, ownership20q, holderMovement, insiderDeals, governance } = overview
   const chrome = signalChrome[signal.signal]
   const TIcon = trendIcon[signal.trend]
@@ -146,7 +148,14 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
                   <Eye className="h-3 w-3" />
                   Last quarter: {lastQ.quarter}
                 </span>
-                <DataBadge state="mock" hint="Signal + trend computed from mock 20-quarter ownership pattern" />
+                <DataBadge
+                  state={shareholdingLive ? 'mixed' : 'mock'}
+                  hint={
+                    shareholdingLive
+                      ? `Mini-stats LIVE from ${shareholdingSource || 'Screener.in'}. Signal narrative still mock.`
+                      : 'Signal + trend computed from mock 20-quarter ownership pattern'
+                  }
+                />
               </div>
 
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
@@ -371,7 +380,14 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
                   Ownership pattern · 20 quarters
                 </div>
-                <DataBadge state="mock" hint="20-quarter ownership pattern is mock data" />
+                <DataBadge
+                state={shareholdingLive ? 'live' : 'mock'}
+                hint={
+                  shareholdingLive
+                    ? `Live shareholding from ${shareholdingSource || 'Screener.in'}`
+                    : '20-quarter ownership pattern is mock data'
+                }
+              />
               </div>
               <h3 className="text-lg font-semibold text-ink-900">
                 Promoter · FII · DII · Public

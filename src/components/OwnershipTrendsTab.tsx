@@ -32,6 +32,8 @@ import DataBadge from './DataBadge'
 interface Props {
   overview: CompanyOverview
   trends: OwnershipTrendsData
+  shareholdingLive?: boolean
+  shareholdingSource?: string
 }
 
 const STATUS_CHROME = {
@@ -73,7 +75,7 @@ const STATUS_CHROME = {
   },
 } as const
 
-export default function OwnershipTrendsTab({ overview, trends }: Props) {
+export default function OwnershipTrendsTab({ overview, trends, shareholdingLive, shareholdingSource }: Props) {
   const { story, heatmap, holders, breadth } = trends
   const { ownership20q } = overview
   const chrome = STATUS_CHROME[story.status]
@@ -104,7 +106,14 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
                 <StatusIcon className="h-3 w-3" />
                 {story.status}
               </span>
-              <DataBadge state="mock" hint="Movement story derived from mock holders + heatmap" />
+              <DataBadge
+                state={shareholdingLive ? 'mixed' : 'mock'}
+                hint={
+                  shareholdingLive
+                    ? `Trend % live from ${shareholdingSource || 'Screener.in'}. Narrative still mock.`
+                    : 'Movement story derived from mock holders + heatmap'
+                }
+              />
             </div>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
               <span className={chrome.text}>Ownership is {story.status.toLowerCase()}</span>
@@ -137,7 +146,14 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
               <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
                 Ownership pattern · 20 quarters
               </div>
-              <DataBadge state="mock" hint="Quarterly ownership pattern is mock — BSE shareholding API is closed" />
+              <DataBadge
+                state={shareholdingLive ? 'live' : 'mock'}
+                hint={
+                  shareholdingLive
+                    ? `Live shareholding pattern from ${shareholdingSource || 'Screener.in'}`
+                    : 'Quarterly ownership pattern is mock — Screener data not yet ingested for this ticker'
+                }
+              />
             </div>
             <h3 className="text-lg font-semibold text-ink-900">Promoter · FII · DII · Public</h3>
           </div>
