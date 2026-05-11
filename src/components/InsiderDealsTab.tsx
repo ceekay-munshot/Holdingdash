@@ -23,6 +23,7 @@ import type {
 import InsiderTimelineChart from './InsiderTimelineChart'
 import InsiderTransactionTable from './InsiderTransactionTable'
 import BulkDealsSection from './BulkDealsSection'
+import DataBadge from './DataBadge'
 import type { LiveDealsBundle, LivePriceHistory } from '../lib/liveData'
 
 interface Props {
@@ -170,6 +171,7 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
                 <SignalIcon className="h-3 w-3" />
                 {summary.signal}
               </span>
+              <DataBadge state="mock" hint="Signal derived from mock insider trades — NSE blocks GitHub IPs" />
             </div>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
               <span className={chrome.text}>Insider activity is {summary.signal.toLowerCase()}</span>
@@ -198,8 +200,18 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
       <section className="space-y-3 animate-fadeUp">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-              Timeline horizon
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                Timeline horizon
+              </div>
+              <DataBadge
+                state={usingLivePrices ? 'mixed' : 'mock'}
+                hint={
+                  usingLivePrices
+                    ? 'Price line is LIVE from NSE bhavcopy. Buy/sell bars are MOCK.'
+                    : 'Both price and insider bars are mock. Live prices appear once bhavcopy ingestion runs for this ticker.'
+                }
+              />
             </div>
             <div className="text-sm text-ink-500">
               Insider buys and sells overlaid on price.
@@ -240,6 +252,10 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
       </section>
 
       {/* === 4. SIGNAL CARDS === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>Signal cards</span>
+        <DataBadge state="mock" />
+      </div>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 animate-fadeUp">
         {summary.cards.map((card) => {
           const Icon = CARD_ICON[card.key]
@@ -277,10 +293,25 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
 
       {/* === 5. TRANSACTIONS TABLE === */}
       <section className="animate-fadeUp">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          <span>Insider transactions</span>
+          <DataBadge state="mock" hint="NSE corporates-pit API blocks GitHub IPs — mock for now" />
+        </div>
         <InsiderTransactionTable trades={trades} />
       </section>
 
       {/* === 6. BULK / BLOCK DEALS === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>Bulk & block deals</span>
+        <DataBadge
+          state={usingLiveDeals ? 'live' : 'mock'}
+          hint={
+            usingLiveDeals
+              ? 'Live from NSE archives — last 7 trading days, refreshed daily'
+              : 'Live deals not yet ingested for this ticker'
+          }
+        />
+      </div>
       <BulkDealsSection deals={effectiveDeals} read={effectiveDealsRead} live={usingLiveDeals} />
 
       {/* === 7. FINAL READ === */}
@@ -295,8 +326,11 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
             <Quote className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
-              Final insider & deals read
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+                Final insider & deals read
+              </div>
+              <DataBadge state="mixed" hint="Narrative combines mock insider signal with live bulk/block context" />
             </div>
             <p className="mt-1 max-w-3xl text-[15px] leading-relaxed text-ink-800">
               {summary.finalRead}

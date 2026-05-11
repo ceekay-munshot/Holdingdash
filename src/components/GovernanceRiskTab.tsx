@@ -21,6 +21,7 @@ import type {
 import RPTTrendChart from './RPTTrendChart'
 import RelatedPartyTable from './RelatedPartyTable'
 import RPTFlowVisual from './RPTFlowVisual'
+import DataBadge from './DataBadge'
 
 interface Props {
   data: GovernanceData
@@ -116,6 +117,7 @@ export default function GovernanceRiskTab({ data, companyName }: Props) {
                 <SignalIcon className="h-3 w-3" />
                 {summary.signal}
               </span>
+              <DataBadge state="mock" hint="Governance signal derived from mock RPT trend — annual report PDF parsing planned" />
             </div>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
               <span className={chrome.text}>Governance is {summary.signal.toLowerCase()}</span>
@@ -130,9 +132,17 @@ export default function GovernanceRiskTab({ data, companyName }: Props) {
       </section>
 
       {/* === 2. RPT vs REVENUE TREND === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>RPT vs Revenue trend</span>
+        <DataBadge state="mock" hint="RPT data lives in annual reports — PDF extraction via Claude API is Phase 4" />
+      </div>
       <RPTTrendChart trend={trend} annotation={trendAnnotation} />
 
       {/* === 3. SIGNAL CARDS === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>Signal cards</span>
+        <DataBadge state="mock" />
+      </div>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 animate-fadeUp">
         {summary.cards.map((card) => {
           const Icon = CARD_ICON[card.key]
@@ -163,17 +173,28 @@ export default function GovernanceRiskTab({ data, companyName }: Props) {
       </section>
 
       {/* === 4. RELATED PARTY TABLE === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>Top related parties</span>
+        <DataBadge state="mock" />
+      </div>
       <RelatedPartyTable parties={parties} />
 
       {/* === 5. RPT FLOW VISUAL === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>RPT flow visual</span>
+        <DataBadge state="mock" />
+      </div>
       <RPTFlowVisual flows={flows} companyName={companyName} />
 
       {/* === 6. GOVERNANCE TREND STRIP === */}
       <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-              Governance trend strip
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                Governance trend strip
+              </div>
+              <DataBadge state="mock" />
             </div>
             <h3 className="text-lg font-semibold text-ink-900">Direction of travel on each marker</h3>
           </div>
@@ -225,8 +246,11 @@ export default function GovernanceRiskTab({ data, companyName }: Props) {
             <Quote className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">
-              Final governance read
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">
+                Final governance read
+              </div>
+              <DataBadge state="mock" />
             </div>
             <p className="mt-1 max-w-3xl text-[15px] leading-relaxed text-ink-800">{summary.finalRead}</p>
             <div className="mt-4 flex flex-wrap gap-2">
