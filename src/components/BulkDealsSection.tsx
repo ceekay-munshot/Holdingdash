@@ -107,6 +107,35 @@ export default function BulkDealsSection({ deals, read, live }: Props) {
     return { accum: +accum.toFixed(1), exit: +exit.toFixed(1) }
   }, [deals])
 
+  // Empty live state: live pipeline active for this ticker but no deals in window
+  if (live && deals.length === 0) {
+    return (
+      <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+            Bulk & block deals · last 7 trading days
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            <Wifi className="h-3 w-3" />
+            Live
+          </span>
+        </div>
+        <h3 className="text-lg font-semibold text-ink-900">No reportable bulk or block deals this week</h3>
+        <div className="mt-4 rounded-2xl border border-ink-100 bg-ink-50/40 p-6 text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+            <Wifi className="h-5 w-5" />
+          </div>
+          <p className="mx-auto mt-3 max-w-md text-[13px] leading-relaxed text-ink-700">
+            The NSE bulk + block deal pipeline is live for this ticker — we just didn't find any
+            reportable trade in the last 7 trading days. This is typical for large caps where the
+            0.5% bulk-deal threshold rarely trips. Smaller/mid-cap tickers show real flow here.
+          </p>
+          <p className="mt-3 text-[11px] text-ink-400">{read}</p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

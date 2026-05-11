@@ -107,7 +107,17 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
 
   const liveDealsCount =
     (liveDeals?.bulk?.rows?.length ?? 0) + (liveDeals?.block?.rows?.length ?? 0)
+  // Live infrastructure is detected via live prices — if prices flow for this
+  // ticker, the daily deals workflow is also active. When prices flow but no
+  // deals exist for this ticker, that's a real "no recent activity" signal,
+  // not a missing pipeline.
+  const liveInfrastructureActive = !!livePrices && livePrices.rows.length > 0
+  const usingLiveDeals = liveDealsCount > 0
+  const liveDealsEmpty = liveInfrastructureActive && !usingLiveDeals
   const effectiveDeals: BulkBlockDeal[] = useMemo(() => {
+    // When live infrastructure is up but this ticker had no reportable deals,
+    // show an empty list (the UI explains why) rather than misleading mock rows.
+    if (liveDealsEmpty) return []
     if (!liveDeals || liveDealsCount === 0) return deals
     const merged: BulkBlockDeal[] = []
     for (const r of liveDeals.bulk.rows) {
@@ -134,12 +144,13 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
     }
     merged.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     return merged.slice(0, 12)
-  }, [liveDeals, liveDealsCount, deals])
+  }, [liveDeals, liveDealsCount, liveDealsEmpty, deals])
 
   const usingLivePrices = livePrices && livePrices.rows.length >= 20
-  const usingLiveDeals = liveDealsCount > 0
   const effectiveDealsRead = usingLiveDeals
     ? `Live · ${liveDealsCount} bulk / block deals over the last 7 trading days from NSE archives.`
+    : liveDealsEmpty
+    ? 'Live · NSE bulk + block deal pipeline is active for this ticker. No reportable bulk/block deal in the last 7 trading days — typical for large caps where 0.5% bulk threshold rarely trips.'
     : dealsRead
 
   // annotation tied to horizon
@@ -304,15 +315,21 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
       <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
         <span>Bulk & block deals</span>
         <DataBadge
-          state={usingLiveDeals ? 'live' : 'mock'}
+          state={usingLiveDeals || liveDealsEmpty ? 'live' : 'mock'}
           hint={
             usingLiveDeals
               ? 'Live from NSE archives — last 7 trading days, refreshed daily'
+              : liveDealsEmpty
+              ? 'Live NSE pipeline active for this ticker. No reportable bulk/block deal in last 7 trading days.'
               : 'Live deals not yet ingested for this ticker'
           }
         />
       </div>
-      <BulkDealsSection deals={effectiveDeals} read={effectiveDealsRead} live={usingLiveDeals} />
+      <BulkDealsSection
+        deals={effectiveDeals}
+        read={effectiveDealsRead}
+        live={usingLiveDeals || liveDealsEmpty}
+      />
 
       {/* === 7. FINAL READ === */}
       <section className="relative overflow-hidden rounded-3xl border border-ink-100 bg-gradient-to-br from-ink-50 to-white p-6 md:p-8 shadow-card animate-fadeUp">
