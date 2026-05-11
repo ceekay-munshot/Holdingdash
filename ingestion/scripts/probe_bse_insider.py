@@ -2,7 +2,8 @@
 
 Phase 1 of the live-insider buildout. NOT part of the production data flow —
 runs via .github/workflows/probe-bse-insider.yml, prints to the job log,
-writes nothing to the data branch.
+AND commits a JSON findings file back to this branch so the dev workflow
+can read the structured output (the worker doesn't expose log APIs).
 
 Three checks, all routed via BSE_PROXY_URL Worker:
   1. AnnSubCategoryGetData/w with strCat="Insider Trading / SAST" — the
@@ -12,6 +13,8 @@ Three checks, all routed via BSE_PROXY_URL Worker:
      per-trade structured data if exposed.
   3. Fetch one PDF attachment — verify URL pattern and that the attachment
      domain (www.bseindia.com) is reachable from Actions IPs.
+
+Output file: ingestion/debug/probe_bse_insider_output.json
 """
 from __future__ import annotations
 
@@ -19,7 +22,7 @@ import json
 import os
 import sys
 import urllib.parse
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -28,6 +31,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 PROXY = os.environ.get("BSE_PROXY_URL")
 SECRET = os.environ.get("BSE_PROXY_SECRET")
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "debug" / "probe_bse_insider_output.json"
+
+FINDINGS: dict = {
+    "ranAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    "proxySet": False,
+    "secretSet": False,
+    "probe1a": None,
+    "probe1b": None,
+    "probe2": [],
+    "probe3": None,
+}
 
 
 def call(path: str, params: dict[str, str], session: requests.Session) -> tuple[int, str, str]:
@@ -62,44 +76,66 @@ def probe_anncat(session: requests.Session, start: str, end: str, *, label: str)
     }
     status, upstream, body = call("/BseIndiaAPI/api/AnnSubCategoryGetData/w", params, session)
     print(f"  HTTP {status}  upstream={upstream}  body_len={len(body)}", flush=True)
+    finding: dict = {
+        "range": [start, end],
+        "httpStatus": status,
+        "upstreamStatus": upstream,
+        "bodyLen": len(body),
+        "rowCount": 0,
+        "firstRowKeys": [],
+        "firstRow": None,
+        "sampleHeadlines": [],
+    }
     if status != 200:
         print(f"  body[:500]: {body[:500]}", flush=True)
-        return {}
+        finding["bodySnippet"] = body[:1500]
+        return {"finding": finding, "first": {}}
     try:
         data = json.loads(body)
     except json.JSONDecodeError:
         print(f"  not JSON. body[:300]: {body[:300]}", flush=True)
-        return {}
+        finding["error"] = "not-json"
+        finding["bodySnippet"] = body[:1500]
+        return {"finding": finding, "first": {}}
     print(f"  top-level type: {type(data).__name__}", flush=True)
+    table = None
     if isinstance(data, dict):
         print(f"  top-level keys: {list(data.keys())}", flush=True)
+        finding["topLevelKeys"] = list(data.keys())
         table = data.get("Table")
         if table is None:
             for k in ("data", "Result", "result", "rows"):
                 if k in data:
                     table = data[k]
                     print(f"  using key '{k}' for rows", flush=True)
+                    finding["rowsKey"] = k
                     break
     else:
         table = data
     if not isinstance(table, list) or not table:
         print(f"  no row list found. raw[:600]: {body[:600]}", flush=True)
-        return {}
-    first = table[0]
+        finding["error"] = "empty-table"
+        finding["bodySnippet"] = body[:1500]
+        return {"finding": finding, "first": {}}
+    first = table[0] if isinstance(table[0], dict) else {}
     print(f"  rows: {len(table)}", flush=True)
-    if isinstance(first, dict):
+    finding["rowCount"] = len(table)
+    if first:
         print(f"  FIRST ROW KEYS ({len(first)}): {list(first.keys())}", flush=True)
         print(f"  FIRST ROW DUMP:\n{json.dumps(first, indent=2, default=str)[:2500]}", flush=True)
-        # Also dump 3 more headlines for context
+        finding["firstRowKeys"] = list(first.keys())
+        finding["firstRow"] = first
         print("\n  SAMPLE HEADLINES:", flush=True)
-        for r in table[:5]:
+        for r in table[:8]:
             if isinstance(r, dict):
                 hdr = r.get("HEADLINE") or r.get("NEWSSUB") or r.get("Headline") or ""
                 scrip = r.get("SCRIP_CD") or r.get("scripcd") or ""
                 comp = r.get("SLONGNAME") or r.get("CompanyName") or ""
                 dt = r.get("NEWS_DT") or r.get("DT_TM") or ""
-                print(f"    [{dt}] {scrip} {comp[:30]}: {hdr[:140]}", flush=True)
-    return {"rows": table, "first": first if isinstance(first, dict) else {}}
+                line = f"[{dt}] {scrip} {str(comp)[:30]}: {str(hdr)[:140]}"
+                print(f"    {line}", flush=True)
+                finding["sampleHeadlines"].append(line)
+    return {"finding": finding, "first": first}
 
 
 def probe_alternate_endpoints(session: requests.Session, scripcode: str) -> None:
@@ -150,22 +186,37 @@ def probe_alternate_endpoints(session: requests.Session, scripcode: str) -> None
         snippet = body[:600].replace("\n", " ").replace("\r", " ")
         print(f"    HTTP {status} upstream={upstream} body_len={len(body)}", flush=True)
         print(f"    body[:600]: {snippet}", flush=True)
+        entry: dict = {
+            "path": path,
+            "params": params,
+            "httpStatus": status,
+            "upstreamStatus": upstream,
+            "bodyLen": len(body),
+            "bodySnippet": body[:1200],
+        }
         if status == 200 and len(body) > 50 and body.lstrip().startswith(("{", "[")):
             try:
                 data = json.loads(body)
                 if isinstance(data, dict):
                     print(f"    keys: {list(data.keys())}", flush=True)
+                    entry["topLevelKeys"] = list(data.keys())
                     for k in ("Table", "data", "Result"):
                         v = data.get(k)
                         if isinstance(v, list) and v and isinstance(v[0], dict):
                             print(f"    {k}[0] keys: {list(v[0].keys())}", flush=True)
                             print(f"    {k}[0] dump: {json.dumps(v[0], indent=2, default=str)[:800]}", flush=True)
+                            entry["rowsKey"] = k
+                            entry["firstRowKeys"] = list(v[0].keys())
+                            entry["firstRow"] = v[0]
                             break
                 elif isinstance(data, list) and data and isinstance(data[0], dict):
                     print(f"    [0] keys: {list(data[0].keys())}", flush=True)
                     print(f"    [0] dump: {json.dumps(data[0], indent=2, default=str)[:800]}", flush=True)
+                    entry["firstRowKeys"] = list(data[0].keys())
+                    entry["firstRow"] = data[0]
             except json.JSONDecodeError:
                 pass
+        FINDINGS["probe2"].append(entry)
 
 
 def probe_pdf(session: requests.Session, first_row: dict) -> None:
@@ -176,8 +227,11 @@ def probe_pdf(session: requests.Session, first_row: dict) -> None:
         or first_row.get("attachment")
         or ""
     )
+    pdf_finding: dict = {"attachment": attach, "attempts": []}
     if not attach:
         print(f"  no attachment field on first row. keys: {list(first_row.keys())}", flush=True)
+        pdf_finding["error"] = "no-attachment-field"
+        FINDINGS["probe3"] = pdf_finding
         return
     candidates = [
         f"https://www.bseindia.com/xml-data/corpfiling/AttachLive/{attach}",
@@ -185,6 +239,7 @@ def probe_pdf(session: requests.Session, first_row: dict) -> None:
     ]
     for url in candidates:
         print(f"\n  → GET {url}", flush=True)
+        attempt: dict = {"url": url}
         try:
             r = session.get(
                 url,
@@ -197,23 +252,40 @@ def probe_pdf(session: requests.Session, first_row: dict) -> None:
             ctype = r.headers.get("Content-Type", "")
             print(f"    HTTP {r.status_code}  content-type={ctype}  bytes={len(r.content)}", flush=True)
             print(f"    first 24 bytes (hex): {r.content[:24].hex()}", flush=True)
-            print(f"    starts with %PDF: {r.content.startswith(b'%PDF')}", flush=True)
-            if r.status_code == 200 and r.content.startswith(b"%PDF"):
+            is_pdf = r.content.startswith(b"%PDF")
+            print(f"    starts with %PDF: {is_pdf}", flush=True)
+            attempt.update({
+                "httpStatus": r.status_code,
+                "contentType": ctype,
+                "bytes": len(r.content),
+                "first24Hex": r.content[:24].hex(),
+                "isPdf": is_pdf,
+            })
+            pdf_finding["attempts"].append(attempt)
+            if r.status_code == 200 and is_pdf:
+                FINDINGS["probe3"] = pdf_finding
                 return
         except requests.RequestException as e:
             print(f"    {type(e).__name__}: {e}", flush=True)
+            attempt["error"] = f"{type(e).__name__}: {e}"
+            pdf_finding["attempts"].append(attempt)
+    FINDINGS["probe3"] = pdf_finding
 
 
 def main() -> int:
     print(f"PROXY = {PROXY or '(unset)'}", flush=True)
     print(f"SECRET set: {bool(SECRET)}", flush=True)
+    FINDINGS["proxySet"] = bool(PROXY)
+    FINDINGS["secretSet"] = bool(SECRET)
     session = requests.Session()
     # Probe 1a — Dec 2024 (definitely-historical, definitely has filings)
     hist = probe_anncat(session, "20241215", "20241222", label="a")
+    FINDINGS["probe1a"] = hist["finding"]
     # Probe 1b — last 21 days against real Actions runner clock
     today_str = date.today().strftime("%Y%m%d")
     three_weeks = (date.today() - timedelta(days=21)).strftime("%Y%m%d")
     recent = probe_anncat(session, three_weeks, today_str, label="b")
+    FINDINGS["probe1b"] = recent["finding"]
 
     first = hist.get("first") or recent.get("first") or {}
     scrip = ""
@@ -225,7 +297,12 @@ def main() -> int:
         probe_pdf(session, first)
     else:
         print("\n=== Probe 3 skipped (no row from probe 1) ===", flush=True)
+        FINDINGS["probe3"] = {"error": "no-row-from-probe-1"}
 
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with OUTPUT_PATH.open("w", encoding="utf-8") as f:
+        json.dump(FINDINGS, f, indent=2, default=str)
+    print(f"\nWrote findings → {OUTPUT_PATH}", flush=True)
     print("\n=== Probe complete ===", flush=True)
     return 0
 

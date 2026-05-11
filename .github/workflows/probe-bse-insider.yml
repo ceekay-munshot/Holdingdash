@@ -14,7 +14,11 @@ on:
       - '.github/workflows/probe-bse-insider.yml'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: probe-bse-insider
+  cancel-in-progress: true
 
 jobs:
   probe:
@@ -26,6 +30,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: claude/holdingdash-development-jrcsp
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -39,3 +46,17 @@ jobs:
 
       - name: Probe
         run: python -u -m ingestion.scripts.probe_bse_insider
+
+      - name: Commit findings back to dev branch
+        run: |
+          set -e
+          git config user.name "holdingdash-bot"
+          git config user.email "bot@holdingdash.local"
+          if [ -z "$(git status --porcelain ingestion/debug/)" ]; then
+            echo "No probe output to commit."
+            exit 0
+          fi
+          STAMP=$(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          git add ingestion/debug/
+          git commit -m "Probe findings @ $STAMP"
+          git push origin HEAD:claude/holdingdash-development-jrcsp
