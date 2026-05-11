@@ -1,0 +1,61 @@
+"""Hardcoded NSE-symbol → BSE-code mapping for the NIFTY 50.
+
+This is the **ultimate fallback** when both BSE bhavcopy and the BSE
+JSON API fail. BSE scrip codes are stable (rarely reassigned), so a
+hand-curated list of the top 50 is reliable for years.
+
+Last verified: May 2026 against bseindia.com individual company pages.
+"""
+
+NIFTY50_BSE_CODES: dict[str, str] = {
+    "RELIANCE": "500325",
+    "HDFCBANK": "500180",
+    "ICICIBANK": "532174",
+    "INFY": "500209",
+    "TCS": "532540",
+    "BHARTIARTL": "532454",
+    "ITC": "500875",
+    "SBIN": "500112",
+    "HINDUNILVR": "500696",
+    "LT": "500510",
+    "BAJFINANCE": "500034",
+    "AXISBANK": "532215",
+    "KOTAKBANK": "500247",
+    "HCLTECH": "532281",
+    "MARUTI": "532500",
+    "ASIANPAINT": "500820",
+    "SUNPHARMA": "524715",
+    "TITAN": "500114",
+    "NTPC": "532555",
+    "POWERGRID": "532898",
+    "WIPRO": "507685",
+    "ULTRACEMCO": "532538",
+    "M&M": "500520",
+    "TATAMOTORS": "500570",
+    "TATASTEEL": "500470",
+    "NESTLEIND": "500790",
+    "JSWSTEEL": "500228",
+    "ONGC": "500312",
+    "GRASIM": "500300",
+    "INDUSINDBK": "532187",
+    "ADANIENT": "512599",
+    "ADANIPORTS": "532921",
+    "COALINDIA": "533278",
+    "DIVISLAB": "532488",
+    "TECHM": "532755",
+    "BAJAJFINSV": "532978",
+    "BPCL": "500547",
+    "HDFCLIFE": "540777",
+    "SBILIFE": "540719",
+    "HEROMOTOCO": "500182",
+    "CIPLA": "500087",
+    "BRITANNIA": "500825",
+    "EICHERMOT": "505200",
+    "DRREDDY": "500124",
+    "APOLLOHOSP": "508869",
+    "TATACONSUM": "500800",
+    "BAJAJ-AUTO": "532977",
+    "LTIM": "540005",
+    "HINDALCO": "500440",
+    "UPL": "512070",
+}
