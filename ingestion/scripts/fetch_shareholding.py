@@ -26,19 +26,29 @@ import argparse
 import os
 import sys
 import time
+import urllib.parse
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import requests
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from ingestion.utils.bse import make_bse_session  # noqa: E402
+from ingestion.utils.bse import make_bse_session, warmup_bse  # noqa: E402
 from ingestion.utils.storage import read_json, write_json, log  # noqa: E402
 from ingestion.utils.universe import resolve as resolve_universe  # noqa: E402
 
+# Primary endpoint
 API_URL = "https://api.bseindia.com/BseIndiaAPI/api/ShareHoldingPatternData/w"
+# Alternative endpoint names BSE has used over the years
+ALT_URLS = [
+    "https://api.bseindia.com/BseIndiaAPI/api/ShareHoldingPatternStockId/w",
+    "https://api.bseindia.com/BseIndiaAPI/api/SHPCmprrPatternStockwise/w",
+    "https://api.bseindia.com/BseIndiaAPI/api/SHPCategPattrnPatternStockwise/w",
+]
+# Free CORS proxy — last resort if api.bseindia.com is blocked from our IP
+PROXY_TEMPLATE = "https://api.allorigins.win/raw?url={url}"
 
 
 def quarter_ends(n: int) -> list[date]:
@@ -107,26 +117,81 @@ def _extract_categories(payload: dict[str, Any]) -> dict[str, float]:
     return {k: round(v, 2) for k, v in out.items()}
 
 
+_PROXY_OK: bool | None = None  # cache: None=unknown, True=use proxy, False=skip
+
+
+def _try_url(session: requests.Session, url: str, params: dict[str, str], note: str) -> dict[str, Any] | None:
+    try:
+        r = session.get(url, params=params, timeout=30)
+        if r.status_code == 200:
+            try:
+                payload = r.json()
+            except ValueError:
+                log(f"      {note}: 200 but non-JSON body")
+                return None
+            if payload:
+                return payload if isinstance(payload, dict) else {"Table": payload}
+            return None
+        log(f"      {note}: HTTP {r.status_code}")
+    except requests.RequestException as e:
+        log(f"      {note}: {type(e).__name__}: {e}")
+    return None
+
+
+def _try_proxy(scrip_code: str, qtrid: str) -> dict[str, Any] | None:
+    """Last-resort: route through a free CORS proxy."""
+    global _PROXY_OK
+    if _PROXY_OK is False:
+        return None
+    target = (
+        f"{API_URL}?scripcd={urllib.parse.quote(scrip_code)}&qtrid={urllib.parse.quote(qtrid)}"
+    )
+    url = PROXY_TEMPLATE.format(url=urllib.parse.quote(target, safe=""))
+    try:
+        r = requests.get(url, timeout=45, headers={"Accept": "application/json"})
+        if r.status_code == 200:
+            try:
+                payload = r.json()
+            except ValueError:
+                return None
+            if payload:
+                _PROXY_OK = True
+                return payload if isinstance(payload, dict) else {"Table": payload}
+        else:
+            # First failure means proxy is unreachable; don't keep hammering
+            if _PROXY_OK is None:
+                _PROXY_OK = False
+                log(f"      proxy unreachable (HTTP {r.status_code}) — disabling for this run")
+    except requests.RequestException as e:
+        if _PROXY_OK is None:
+            _PROXY_OK = False
+            log(f"      proxy unreachable ({e}) — disabling for this run")
+    return None
+
+
 def fetch_one(session: requests.Session, scrip_code: str, qtr_end: date) -> dict[str, Any] | None:
     qtrid = qtr_end.strftime("%Y%m%d")
     params = {"scripcd": scrip_code, "qtrid": qtrid}
-    try:
-        r = session.get(API_URL, params=params, timeout=30)
-        r.raise_for_status()
-        payload = r.json()
-        if not payload:
-            return None
-        cats = _extract_categories(payload if isinstance(payload, dict) else {"Table": payload})
-        if all(v == 0 for v in cats.values()):
-            return None
-        return {
-            "quarter": qtr_end.isoformat(),
-            "scripCode": scrip_code,
-            **cats,
-            "fetched": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }
-    except requests.RequestException:
+    # Try primary, then alternate URLs, then proxy
+    payload = _try_url(session, API_URL, params, "primary")
+    if payload is None:
+        for alt in ALT_URLS:
+            payload = _try_url(session, alt, params, f"alt {alt.rsplit('/', 2)[-2]}")
+            if payload:
+                break
+    if payload is None:
+        payload = _try_proxy(scrip_code, qtrid)
+    if not payload:
         return None
+    cats = _extract_categories(payload)
+    if all(v == 0 for v in cats.values()):
+        return None
+    return {
+        "quarter": qtr_end.isoformat(),
+        "scripCode": scrip_code,
+        **cats,
+        "fetched": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
 
 
 def main() -> int:
@@ -176,10 +241,17 @@ def _run(args: argparse.Namespace) -> int:
     )
 
     session = make_bse_session()
+    warmup_bse(session)
     total_hits = 0
     total_misses = 0
     matched = 0
+    consecutive_misses = 0
+    CIRCUIT_BREAKER = 40  # after this many in-a-row failures, give up early
+    aborted = False
+
     for symbol in universe:
+        if aborted:
+            break
         scrip = mapping.get(symbol)
         if not scrip:
             continue
@@ -190,10 +262,19 @@ def _run(args: argparse.Namespace) -> int:
             if data:
                 rows.append(data)
                 total_hits += 1
+                consecutive_misses = 0
                 write_json(f"shareholding/{symbol}/{q.isoformat()}.json", data)
             else:
                 total_misses += 1
+                consecutive_misses += 1
             time.sleep(args.delay)
+            if consecutive_misses >= CIRCUIT_BREAKER:
+                log(
+                    f"fetch_shareholding: {CIRCUIT_BREAKER} consecutive misses — "
+                    "BSE shareholding endpoint appears blocked. Aborting early."
+                )
+                aborted = True
+                break
         if rows:
             rows.sort(key=lambda r: r["quarter"])
             write_json(

@@ -23,3 +23,11 @@ def make_bse_session() -> requests.Session:
     s = requests.Session()
     s.headers.update(BSE_HEADERS)
     return s
+
+
+def warmup_bse(session: requests.Session) -> None:
+    """Seed cookies by hitting BSE homepage first."""
+    try:
+        session.get("https://www.bseindia.com/", timeout=15)
+    except requests.RequestException:
+        pass
