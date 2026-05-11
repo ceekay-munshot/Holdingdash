@@ -91,6 +91,25 @@ export interface LiveInsiderBundle {
   rows: LiveInsiderRow[]
 }
 
+export interface LiveShareholdingQuarter {
+  period: string // e.g. "Mar 2024"
+  periodIso: string | null // e.g. "2024-03-31"
+  promoter: number
+  fii: number
+  dii: number
+  public: number
+  government: number
+  others: number
+}
+
+export interface LiveShareholding {
+  symbol: string
+  source: string
+  updated: string
+  count: number
+  quarters: LiveShareholdingQuarter[]
+}
+
 /* ===== fetch helpers ===== */
 
 const memoryCache = new Map<string, unknown>()
@@ -140,6 +159,10 @@ export function fetchTickerDeals(symbol: string): Promise<LiveDealsBundle | null
 
 export function fetchTickerInsider(symbol: string): Promise<LiveInsiderBundle | null> {
   return fetchJson<LiveInsiderBundle>(`by_ticker/${encodeURIComponent(symbol)}/insider.json`)
+}
+
+export function fetchTickerShareholding(symbol: string): Promise<LiveShareholding | null> {
+  return fetchJson<LiveShareholding>(`by_ticker/${encodeURIComponent(symbol)}/shareholding.json`)
 }
 
 /** Strips the .NS suffix used in the dashboard's internal ticker format. */

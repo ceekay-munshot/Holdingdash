@@ -1,40 +1,51 @@
 /**
- * HoldingDash · BSE proxy
+ * HoldingDash · BSE + Screener proxy
  *
- * A tiny Cloudflare Worker that forwards requests to api.bseindia.com.
- * GitHub Actions runner IPs are blocked by BSE; Cloudflare Worker IPs
- * generally are not, so this proxy unblocks the data flow.
+ * Cloudflare Worker that forwards requests to api.bseindia.com and
+ * www.screener.in. GitHub Actions runner IPs are blocked by both
+ * upstreams in various ways; Cloudflare Worker egress IPs generally are
+ * not, so this proxy unblocks the data flow.
  *
- * Usage:
- *   GET https://bse-proxy.<account>.workers.dev/bse?path=/BseIndiaAPI/api/ShareHoldingPatternData/w&scripcd=500325&qtrid=20240331
- *
- *   Returns the raw JSON from api.bseindia.com.
+ * Routes:
+ *   GET /health                  health check
+ *   GET /bse?path=...&...        forwards to https://api.bseindia.com<path>?...
+ *   GET /screener?path=...       forwards to https://www.screener.in<path>?...
  *
  * Hardening:
- *   - Only GET is allowed.
- *   - Path must start with /BseIndiaAPI/api/ (so the proxy can only hit BSE).
- *   - Optional SHARED_SECRET header check (set via wrangler secret) — when
- *     present, requests without it are rejected. Stops random people on
- *     the internet from using your free tier.
- *   - Cache disabled — shareholding data is fetched fresh.
+ *   - Only GET allowed.
+ *   - /bse paths must start with /BseIndiaAPI/api/
+ *   - /screener paths must start with /company/
+ *   - Optional SHARED_SECRET header (wrangler secret) — when set,
+ *     callers must include X-Proxy-Secret to use the proxy.
+ *   - Caching disabled — data is always fetched fresh.
+ *   - CORS open — Worker is read-only.
  */
 
 export interface Env {
-  // Optional. Set via `wrangler secret put SHARED_SECRET`. If set, callers
-  // must include X-Proxy-Secret: <value>.
   SHARED_SECRET?: string;
 }
 
-const ALLOWED_PATH_PREFIX = "/BseIndiaAPI/api/";
+const BSE_PATH_PREFIX = "/BseIndiaAPI/api/";
+const SCREENER_PATH_PREFIX = "/company/";
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 const BSE_HEADERS: Record<string, string> = {
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "User-Agent": BROWSER_UA,
   Accept: "application/json, text/plain, */*",
   "Accept-Language": "en-US,en;q=0.9",
   Origin: "https://www.bseindia.com",
   Referer: "https://www.bseindia.com/",
+};
+
+const SCREENER_HEADERS: Record<string, string> = {
+  "User-Agent": BROWSER_UA,
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  Referer: "https://www.screener.in/",
 };
 
 function corsHeaders(): HeadersInit {
@@ -53,33 +64,58 @@ function badRequest(msg: string, status = 400): Response {
   });
 }
 
+async function proxyTo(
+  request: Request,
+  baseUrl: string,
+  targetPath: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const target = new URL(`${baseUrl}${targetPath}`);
+  const url = new URL(request.url);
+  for (const [k, v] of url.searchParams.entries()) {
+    if (k === "path") continue;
+    target.searchParams.set(k, v);
+  }
+  try {
+    const upstream = await fetch(target.toString(), {
+      method: "GET",
+      headers,
+      cf: { cacheTtl: 0, cacheEverything: false },
+    });
+    const body = await upstream.arrayBuffer();
+    return new Response(body, {
+      status: upstream.status,
+      headers: {
+        "Content-Type":
+          upstream.headers.get("Content-Type") || "application/octet-stream",
+        "X-Upstream-Status": String(upstream.status),
+        ...corsHeaders(),
+      },
+    });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return badRequest(`upstream fetch failed: ${msg}`, 502);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // CORS preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
-
     if (request.method !== "GET") {
       return badRequest("method not allowed", 405);
     }
 
     const url = new URL(request.url);
 
-    // Health check
     if (url.pathname === "/" || url.pathname === "/health") {
       return new Response(
-        JSON.stringify({ ok: true, service: "holdingdash-bse-proxy" }),
+        JSON.stringify({ ok: true, service: "holdingdash-proxy" }),
         { headers: { "Content-Type": "application/json", ...corsHeaders() } },
       );
     }
 
-    // The /bse endpoint is the actual proxy
-    if (url.pathname !== "/bse") {
-      return badRequest("not found — use /bse?path=...", 404);
-    }
-
-    // Shared secret check (only if configured)
     if (env.SHARED_SECRET) {
       const provided = request.headers.get("X-Proxy-Secret");
       if (provided !== env.SHARED_SECRET) {
@@ -87,44 +123,43 @@ export default {
       }
     }
 
-    // Pull the target BSE path from the query string
-    const targetPath = url.searchParams.get("path");
-    if (!targetPath || !targetPath.startsWith(ALLOWED_PATH_PREFIX)) {
-      return badRequest(
-        `bad path — must start with ${ALLOWED_PATH_PREFIX}`,
-        400,
+    // BSE
+    if (url.pathname === "/bse") {
+      const targetPath = url.searchParams.get("path");
+      if (!targetPath || !targetPath.startsWith(BSE_PATH_PREFIX)) {
+        return badRequest(
+          `bad path — must start with ${BSE_PATH_PREFIX}`,
+          400,
+        );
+      }
+      return proxyTo(
+        request,
+        "https://api.bseindia.com",
+        targetPath,
+        BSE_HEADERS,
       );
     }
 
-    // Build the upstream URL (BSE), forwarding all other query params
-    const target = new URL(`https://api.bseindia.com${targetPath}`);
-    for (const [k, v] of url.searchParams.entries()) {
-      if (k === "path") continue;
-      target.searchParams.set(k, v);
+    // Screener.in
+    if (url.pathname === "/screener") {
+      const targetPath = url.searchParams.get("path");
+      if (!targetPath || !targetPath.startsWith(SCREENER_PATH_PREFIX)) {
+        return badRequest(
+          `bad path — must start with ${SCREENER_PATH_PREFIX}`,
+          400,
+        );
+      }
+      return proxyTo(
+        request,
+        "https://www.screener.in",
+        targetPath,
+        SCREENER_HEADERS,
+      );
     }
 
-    try {
-      const upstream = await fetch(target.toString(), {
-        method: "GET",
-        headers: BSE_HEADERS,
-        // Disable Cloudflare's edge cache for this fetch
-        cf: { cacheTtl: 0, cacheEverything: false },
-      });
-
-      // Pass through status + body, but normalise headers (CORS-friendly)
-      const body = await upstream.arrayBuffer();
-      return new Response(body, {
-        status: upstream.status,
-        headers: {
-          "Content-Type":
-            upstream.headers.get("Content-Type") || "application/json",
-          "X-Upstream-Status": String(upstream.status),
-          ...corsHeaders(),
-        },
-      });
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      return badRequest(`upstream fetch failed: ${msg}`, 502);
-    }
+    return badRequest(
+      "not found — use /bse?path=... or /screener?path=/company/...",
+      404,
+    );
   },
 };

@@ -3,10 +3,12 @@ import {
   fetchTickerDeals,
   fetchTickerInsider,
   fetchTickerPrices,
+  fetchTickerShareholding,
   symbolFromTicker,
   type LiveDealsBundle,
   type LiveInsiderBundle,
   type LivePriceHistory,
+  type LiveShareholding,
 } from './liveData'
 
 export interface LiveTickerState {
@@ -14,13 +16,14 @@ export interface LiveTickerState {
   prices: LivePriceHistory | null
   deals: LiveDealsBundle | null
   insider: LiveInsiderBundle | null
+  shareholding: LiveShareholding | null
   /** Latest non-null source timestamp across the bundles, for the freshness badge. */
   latestSourceDate: string | null
 }
 
 /**
  * Fetches per-ticker live data from the ingestion `data` branch in parallel.
- * All three endpoints fail gracefully — the dashboard renders mock data
+ * All endpoints fail gracefully — the dashboard renders mock data
  * everywhere this hook returns null.
  */
 export function useLiveTicker(ticker: string | null): LiveTickerState {
@@ -29,12 +32,20 @@ export function useLiveTicker(ticker: string | null): LiveTickerState {
     prices: null,
     deals: null,
     insider: null,
+    shareholding: null,
     latestSourceDate: null,
   })
 
   useEffect(() => {
     if (!ticker) {
-      setState({ loading: false, prices: null, deals: null, insider: null, latestSourceDate: null })
+      setState({
+        loading: false,
+        prices: null,
+        deals: null,
+        insider: null,
+        shareholding: null,
+        latestSourceDate: null,
+      })
       return
     }
     let cancelled = false
@@ -45,14 +56,14 @@ export function useLiveTicker(ticker: string | null): LiveTickerState {
       fetchTickerPrices(symbol).catch(() => null),
       fetchTickerDeals(symbol).catch(() => null),
       fetchTickerInsider(symbol).catch(() => null),
-    ]).then(([prices, deals, insider]) => {
+      fetchTickerShareholding(symbol).catch(() => null),
+    ]).then(([prices, deals, insider, shareholding]) => {
       if (cancelled) return
-      // freshest source date we can find — prices last row date is the best proxy
       let latest: string | null = null
       if (prices && prices.rows.length > 0) {
         latest = prices.rows[prices.rows.length - 1].date
       }
-      setState({ loading: false, prices, deals, insider, latestSourceDate: latest })
+      setState({ loading: false, prices, deals, insider, shareholding, latestSourceDate: latest })
     })
     return () => {
       cancelled = true

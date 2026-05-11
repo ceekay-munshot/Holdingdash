@@ -81,7 +81,15 @@ jobs:
         run: python -u -m ingestion.scripts.fetch_bse_master
         continue-on-error: true
 
-      - name: Fetch shareholding patterns
+      - name: Fetch shareholding from Screener (primary)
+        working-directory: source
+        run: |
+          python -u -m ingestion.scripts.fetch_screener_shareholding \
+            --symbols "${HOLDINGDASH_UNIVERSE}" \
+            --delay 1.0
+        continue-on-error: true
+
+      - name: Fetch shareholding from BSE (fallback for top holders)
         working-directory: source
         run: |
           python -u -m ingestion.scripts.fetch_shareholding \
