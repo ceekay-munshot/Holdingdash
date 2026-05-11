@@ -288,6 +288,27 @@ def main() -> int:
         misses = 0
         consecutive_misses = 0
         CIRCUIT_BREAKER = 20
+        DEBUG_DUMP_LIMIT = 2  # save HTML for first 2 failures, then stop dumping
+        debug_dumps_remaining = DEBUG_DUMP_LIMIT
+
+        def _dump_html(symbol: str, html: str, reason: str) -> None:
+            nonlocal debug_dumps_remaining
+            if debug_dumps_remaining <= 0:
+                return
+            try:
+                out_dir = Path(os.environ.get("OUT_DIR", "data-out"))
+                debug_dir = out_dir / "debug" / "screener"
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                file_path = debug_dir / f"{symbol}.html"
+                with file_path.open("w", encoding="utf-8") as f:
+                    f.write(f"<!-- reason: {reason} -->\n")
+                    f.write(f"<!-- length: {len(html)} chars -->\n")
+                    f.write(f"<!-- ts: {datetime.now(timezone.utc).isoformat()} -->\n")
+                    f.write(html)
+                log(f"    [{symbol}] DUMPED raw HTML to debug/screener/{symbol}.html ({len(html)} chars)")
+                debug_dumps_remaining -= 1
+            except Exception as e:
+                log(f"    [{symbol}] failed to dump HTML: {e}")
 
         for i, symbol in enumerate(universe, 1):
             log(f"[{i}/{len(universe)}] {symbol} ...")
@@ -305,6 +326,8 @@ def main() -> int:
 
             quarters = parse_shareholding(html, symbol=symbol)
             if not quarters:
+                # Save raw HTML so we can inspect what Screener actually returned
+                _dump_html(symbol, html, "parse_returned_zero_quarters")
                 misses += 1
                 consecutive_misses += 1
                 time.sleep(args.delay)
