@@ -42,8 +42,14 @@ PROXY = os.environ.get("BSE_PROXY_URL")
 SECRET = os.environ.get("BSE_PROXY_SECRET")
 
 LOOKBACK_DAYS = 90
-# 50 rows/page × 50 = 2500 row cap. Observed volume: ~260 filings / 14 days
-# across all BSE listings ⇒ ~1700 / 90 days. 50 pages gives ~50% headroom.
+# BSE's AnnSubCategoryGetData/w caps the result set at ~2000 rows per query,
+# regardless of date range. At ~50 filings/day in the "Insider Trading / SAST"
+# category that's only ~40 days of history per call — short of our 90-day
+# lookback. Fix: split the lookback into 30-day chunks and stitch them back
+# together. Each chunk returns ≲ 1500 rows, well under the cap.
+CHUNK_DAYS = 30
+# Per-chunk page cap. 50 pages × 50 rows/page = 2500 row capacity. At observed
+# volume (~50 filings/day × 30 days ≈ 1500), this is ~65% headroom.
 PAGE_LIMIT = 50
 ATTACH_URL = "https://www.bseindia.com/xml-data/corpfiling/AttachHis/{}"
 
@@ -156,22 +162,57 @@ def main() -> int:
     log(f"fetch_insider_bse: loaded {len(bse_to_nse)} BSE→NSE mappings")
 
     end = date.today()
-    start = end - timedelta(days=LOOKBACK_DAYS)
-    all_rows: list[dict[str, Any]] = []
-    for page in range(1, PAGE_LIMIT + 1):
-        rows = fetch_filings_page(start, end, page)
-        if not rows:
-            log(f"fetch_insider_bse: page {page} empty — stopping")
-            break
-        all_rows.extend(rows)
-        log(
-            f"fetch_insider_bse: page {page} -> {len(rows)} rows (cum {len(all_rows)})"
-        )
-        # 50 rows/page is the observed full page; fewer means we hit the end
-        if len(rows) < 50:
-            break
+    lookback_start = end - timedelta(days=LOOKBACK_DAYS)
 
-    normalised = normalise(all_rows, bse_to_nse)
+    # Carve the lookback into CHUNK_DAYS-sized windows, newest first. Each
+    # window is fetched independently — BSE's API caps total rows per query,
+    # so a single 90-day query silently drops the oldest ~50 days.
+    chunks: list[tuple[date, date]] = []
+    cursor = end
+    while cursor > lookback_start:
+        chunk_start = max(cursor - timedelta(days=CHUNK_DAYS), lookback_start)
+        chunks.append((chunk_start, cursor))
+        cursor = chunk_start
+
+    log(f"fetch_insider_bse: fetching {len(chunks)} chunks covering {lookback_start} → {end}")
+
+    all_raw: list[dict[str, Any]] = []
+    for ci, (chunk_start, chunk_end) in enumerate(chunks, 1):
+        log(f"fetch_insider_bse: chunk {ci}/{len(chunks)} {chunk_start} → {chunk_end}")
+        chunk_rows: list[dict[str, Any]] = []
+        for page in range(1, PAGE_LIMIT + 1):
+            rows = fetch_filings_page(chunk_start, chunk_end, page)
+            if not rows:
+                log(f"  page {page} empty — chunk done")
+                break
+            chunk_rows.extend(rows)
+            if len(rows) < 50:
+                log(f"  page {page} -> {len(rows)} rows (partial, chunk done)")
+                break
+            log(f"  page {page} -> {len(rows)} rows (cum {len(chunk_rows)})")
+        log(f"  chunk {ci} total: {len(chunk_rows)} rows")
+        if len(chunk_rows) >= 2000:
+            log(
+                f"  WARNING: chunk {ci} hit ≥2000 rows — BSE may be capping. "
+                f"Consider shrinking CHUNK_DAYS."
+            )
+        all_raw.extend(chunk_rows)
+
+    # Dedupe by NEWSID — BSE chunk boundaries are inclusive on both ends, so a
+    # filing dated exactly on the boundary day appears in both adjacent chunks.
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for r in all_raw:
+        nid = r.get("NEWSID") or ""
+        if nid and nid in seen:
+            continue
+        if nid:
+            seen.add(nid)
+        deduped.append(r)
+    if len(deduped) < len(all_raw):
+        log(f"fetch_insider_bse: deduped {len(all_raw)} → {len(deduped)} rows ({len(all_raw) - len(deduped)} boundary dupes)")
+
+    normalised = normalise(deduped, bse_to_nse)
     mapped = sum(1 for r in normalised if r["symbol"])
     log(
         f"fetch_insider_bse: {len(normalised)} filings ({mapped} mapped to NSE symbol)"
@@ -183,7 +224,7 @@ def main() -> int:
         "source": "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w",
         "provider": "BSE",
         "category": "Insider Trading / SAST",
-        "rangeFrom": start.isoformat(),
+        "rangeFrom": lookback_start.isoformat(),
         "rangeTo": end.isoformat(),
         "count": len(normalised),
         "rows": normalised,
@@ -193,7 +234,7 @@ def main() -> int:
     write_json(f"insider/daily/{today_iso}.json", payload)
     write_json("insider/latest.json", payload)
     log(
-        f"fetch_insider_bse: wrote {len(normalised)} filings for {start} -> {end}"
+        f"fetch_insider_bse: wrote {len(normalised)} filings for {lookback_start} -> {end}"
     )
     return 0
 
