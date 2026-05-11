@@ -78,7 +78,6 @@ def _to_iso(period: str) -> str | None:
     if not mon:
         return None
     year = int(m.group(2))
-    # Quarter-end day
     last_day = {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}[mon]
     return date(year, mon, last_day).isoformat()
 
@@ -115,95 +114,106 @@ def _classify_label(label: str) -> str | None:
 
 
 def fetch_screener_html(symbol: str, session: requests.Session) -> str | None:
-    """Fetch Screener page HTML through the Worker proxy."""
+    """Fetch Screener page HTML through the Worker proxy.
+
+    Tries /consolidated/ first, falls back to plain /company/{SYMBOL}/.
+    """
     if not BSE_PROXY_URL:
         log(f"  no BSE_PROXY_URL set — cannot reach Screener")
         return None
-    target_path = f"/company/{symbol}/consolidated/"
-    url = f"{BSE_PROXY_URL.rstrip('/')}/screener?path={urllib.parse.quote(target_path)}"
-    headers: dict[str, str] = {
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    }
-    if BSE_PROXY_SECRET:
-        headers["X-Proxy-Secret"] = BSE_PROXY_SECRET
-    try:
-        r = session.get(url, headers=headers, timeout=45)
-        upstream = r.headers.get("X-Upstream-Status", "?")
-        if r.status_code != 200:
-            log(f"  {symbol}: HTTP {r.status_code} (upstream {upstream})")
-            return None
-        if not r.text or len(r.text) < 1000:
-            log(f"  {symbol}: empty/short body ({len(r.text)} chars)")
-            return None
-        # Detect Screener's "company not found" page (returns 200 but content is short)
-        if "Shareholding" not in r.text and "shareholding" not in r.text:
-            log(f"  {symbol}: page loaded but no shareholding section")
-            return None
-        return r.text
-    except requests.RequestException as e:
-        log(f"  {symbol}: {type(e).__name__}: {e}")
-        return None
+
+    for sub in ("consolidated/", ""):
+        target_path = f"/company/{symbol}/{sub}"
+        url = f"{BSE_PROXY_URL.rstrip('/')}/screener?path={urllib.parse.quote(target_path)}"
+        headers: dict[str, str] = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        if BSE_PROXY_SECRET:
+            headers["X-Proxy-Secret"] = BSE_PROXY_SECRET
+        try:
+            r = session.get(url, headers=headers, timeout=45)
+            upstream = r.headers.get("X-Upstream-Status", "?")
+            if r.status_code != 200:
+                log(f"    {target_path}: HTTP {r.status_code} (upstream {upstream})")
+                continue
+            if not r.text or len(r.text) < 1000:
+                log(f"    {target_path}: short body ({len(r.text)} chars)")
+                continue
+            if "Shareholding Pattern" not in r.text:
+                log(f"    {target_path}: page loaded ({len(r.text)} chars) but no 'Shareholding Pattern' string")
+                continue
+            return r.text
+        except requests.RequestException as e:
+            log(f"    {target_path}: {type(e).__name__}: {e}")
+    return None
 
 
-def parse_shareholding(html: str) -> list[dict[str, Any]]:
-    """Parse the Shareholding Pattern table from Screener HTML."""
+def parse_shareholding(html: str, symbol: str = "?") -> list[dict[str, Any]]:
+    """Parse the Shareholding Pattern table from Screener HTML.
+
+    Real Screener structure (verified via View Source):
+      <section id="shareholding" class="card card-large">
+        <h2>Shareholding Pattern</h2>
+        <div class="options">
+          <button data-tab-id="quarterly-shp">Quarterly</button>
+          <button data-tab-id="yearly-shp">Yearly</button>
+        </div>
+        <div id="quarterly-shp"> <table>...</table> </div>
+        <div id="yearly-shp" class="hidden"> <table>...</table> </div>
+      </section>
+    """
     soup = BeautifulSoup(html, "lxml")
-
-    # Screener wraps the shareholding section in a <section id="shareholding">
-    section = soup.find(id="shareholding") or soup.find(id="shareholding-pattern")
+    section = soup.find("section", id="shareholding")
     if not section:
-        # Fallback: search by heading text
-        for h in soup.find_all(["h2", "h3"]):
-            if "shareholding" in h.get_text(strip=True).lower():
-                section = h.find_parent("section") or h.parent
+        log(f"    [{symbol}] parser: no <section id='shareholding'> in {len(html)} chars")
+        return []
+
+    # Prefer the quarterly tab content
+    table = None
+    quarterly_div = section.find("div", id="quarterly-shp")
+    if quarterly_div:
+        table = quarterly_div.find("table")
+        if not table:
+            log(f"    [{symbol}] parser: #quarterly-shp exists but no table inside")
+    if not table:
+        all_tables = section.find_all("table")
+        log(f"    [{symbol}] parser: fallback to any table — {len(all_tables)} found in section")
+        for t in all_tables:
+            thead = t.find("thead")
+            if not thead:
+                continue
+            ths = thead.find_all("th")
+            labels = [th.get_text(strip=True) for th in ths]
+            if sum(1 for l in labels if re.match(r"[A-Za-z]{3}\s*\d{4}", l)) >= 4:
+                table = t
                 break
-    if not section:
+        if not table and all_tables:
+            table = all_tables[0]
+    if not table:
         return []
 
-    # Inside section, find the quarterly tab table (vs yearly)
-    # Screener typically renders multiple tables and we pick the one with quarter headers (Mar 2024 etc)
-    tables = section.find_all("table")
-    if not tables:
-        return []
-
-    # Pick the table whose first th row matches month-year pattern
-    target_table = None
-    for t in tables:
-        thead = t.find("thead")
-        if not thead:
-            continue
-        ths = thead.find_all("th")
-        labels = [th.get_text(strip=True) for th in ths if th.get_text(strip=True)]
-        # Look for at least 4 month-year columns
-        month_year_count = sum(1 for l in labels if re.match(r"[A-Za-z]{3}\s*\d{4}", l))
-        if month_year_count >= 4:
-            target_table = t
-            break
-
-    if not target_table:
-        # Fall back to first table in the section
-        target_table = tables[0]
-
-    thead = target_table.find("thead")
+    thead = table.find("thead")
     if not thead:
+        log(f"    [{symbol}] parser: target table has no <thead>")
         return []
     header_cells = thead.find_all("th")
-    # Index 0 is the label column; the rest are quarter columns
     quarter_labels = [
         th.get_text(strip=True)
         for th in header_cells
         if re.match(r"[A-Za-z]{3}\s*\d{4}", th.get_text(strip=True))
     ]
     if not quarter_labels:
+        all_h = [th.get_text(strip=True) for th in header_cells]
+        log(f"    [{symbol}] parser: no month-year headers — got: {all_h[:8]}")
         return []
 
-    # Build a per-period dict: {"Mar 2024": {"promoter": 50.34, "fii": 22.1, ...}}
     per_period: dict[str, dict[str, float]] = {q: {} for q in quarter_labels}
-
-    tbody = target_table.find("tbody")
+    tbody = table.find("tbody")
     if not tbody:
+        log(f"    [{symbol}] parser: target table has no <tbody>")
         return []
 
+    row_matches = 0
     for row in tbody.find_all("tr"):
         cells = row.find_all(["td", "th"])
         if len(cells) < 2:
@@ -212,7 +222,7 @@ def parse_shareholding(html: str) -> list[dict[str, Any]]:
         bucket = _classify_label(label)
         if not bucket:
             continue
-        # Match each value cell to the corresponding quarter label
+        row_matches += 1
         value_cells = cells[1:]
         for i, q in enumerate(quarter_labels):
             if i >= len(value_cells):
@@ -220,6 +230,14 @@ def parse_shareholding(html: str) -> list[dict[str, Any]]:
             val = _parse_pct(value_cells[i].get_text(strip=True))
             if val is not None:
                 per_period[q][bucket] = val
+
+    if row_matches == 0:
+        sample_rows = [
+            row.find(["td", "th"]).get_text(strip=True)[:40] if row.find(["td", "th"]) else ""
+            for row in tbody.find_all("tr")[:5]
+        ]
+        log(f"    [{symbol}] parser: 0 category rows matched. First 5 row labels: {sample_rows}")
+        return []
 
     out: list[dict[str, Any]] = []
     for q in quarter_labels:
@@ -238,7 +256,6 @@ def parse_shareholding(html: str) -> list[dict[str, Any]]:
                 "others": round(data.get("others", 0.0), 2),
             }
         )
-    # Sort chronologically
     out.sort(key=lambda r: r.get("periodIso") or "")
     return out
 
@@ -255,8 +272,7 @@ def main() -> int:
 
     if not BSE_PROXY_URL:
         log("fetch_screener_shareholding: BSE_PROXY_URL not set — exiting")
-        log("Add BSE_PROXY_URL as a GitHub repo secret (your Cloudflare Worker URL)")
-        return 0  # don't fail the workflow
+        return 0
 
     try:
         universe_spec = args.symbols or os.environ.get("HOLDINGDASH_UNIVERSE") or "NIFTY50"
@@ -265,6 +281,7 @@ def main() -> int:
         if args.limit > 0:
             universe = universe[: args.limit]
         log(f"fetch_screener_shareholding: universe='{universe_spec}' ({len(universe)} symbols)")
+        log(f"fetch_screener_shareholding: proxy={BSE_PROXY_URL}")
 
         session = requests.Session()
         hits = 0
@@ -286,9 +303,8 @@ def main() -> int:
                 time.sleep(args.delay)
                 continue
 
-            quarters = parse_shareholding(html)
+            quarters = parse_shareholding(html, symbol=symbol)
             if not quarters:
-                log(f"  {symbol}: parsed page but no shareholding rows")
                 misses += 1
                 consecutive_misses += 1
                 time.sleep(args.delay)
