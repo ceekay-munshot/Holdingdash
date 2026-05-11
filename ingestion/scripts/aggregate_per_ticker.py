@@ -83,7 +83,10 @@ def aggregate_insider() -> int:
         return 0
 
     per_ticker: dict[str, dict[str, dict]] = defaultdict(dict)
-    # Deduplicate by (symbol, intimationDate, insider, value)
+    # Deduplicate by (symbol, intimationDate, insider, value, newsId).
+    # newsId is the BSE filing GUID — distinguishes multiple same-day filings
+    # from one company (e.g. trading-window + SAST disclosure). Empty for NSE
+    # data, which falls back to the old (date, insider, value, quantity) key.
     for snap in daily:
         for row in snap.get("rows", []):
             symbol = row.get("symbol")
@@ -94,6 +97,7 @@ def aggregate_insider() -> int:
                 row.get("insider", ""),
                 str(row.get("value", "")),
                 str(row.get("quantity", "")),
+                row.get("newsId", ""),
             )
             per_ticker[symbol][repr(key)] = row
 
