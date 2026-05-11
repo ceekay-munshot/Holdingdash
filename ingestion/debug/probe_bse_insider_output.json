@@ -1,0 +1,259 @@
+{
+  "ranAt": "2026-05-11T16:29:20+00:00",
+  "proxySet": true,
+  "secretSet": false,
+  "probe1a": {
+    "range": [
+      "20241215",
+      "20241222"
+    ],
+    "httpStatus": 200,
+    "upstreamStatus": "200",
+    "bodyLen": 57056,
+    "rowCount": 50,
+    "firstRowKeys": [
+      "NEWSID",
+      "SCRIP_CD",
+      "XML_NAME",
+      "NEWSSUB",
+      "DT_TM",
+      "NEWS_DT",
+      "CRITICALNEWS",
+      "ANNOUNCEMENT_TYPE",
+      "QUARTER_ID",
+      "FILESTATUS",
+      "ATTACHMENTNAME",
+      "MORE",
+      "HEADLINE",
+      "CATEGORYNAME",
+      "OLD",
+      "RN",
+      "PDFFLAG",
+      "NSURL",
+      "SLONGNAME",
+      "AGENDA_ID",
+      "TotalPageCnt",
+      "News_submission_dt",
+      "DissemDT",
+      "TimeDiff",
+      "Fld_Attachsize",
+      "SUBCATNAME",
+      "AUDIO_VIDEO_FILE"
+    ],
+    "firstRow": {
+      "NEWSID": "b8ea9dbf-08b5-4058-b17b-e97ff272f022",
+      "SCRIP_CD": 543320,
+      "XML_NAME": "ANN_543320_B8EA9DBF-08B5-4058-B17B-E97FF272F022",
+      "NEWSSUB": "Eternal Ltd - 543320 - Closure of Trading Window",
+      "DT_TM": "2024-12-22T21:38:38.807",
+      "NEWS_DT": "2024-12-22T21:38:38.807",
+      "CRITICALNEWS": 0,
+      "ANNOUNCEMENT_TYPE": "A",
+      "QUARTER_ID": null,
+      "FILESTATUS": "N    ",
+      "ATTACHMENTNAME": "6586e524-23de-4031-b265-7888da947895.pdf",
+      "MORE": "",
+      "HEADLINE": "Zomato Limited has informed the exchange regarding trading window closure pursuant to SEBI (Prohibition of Insider Trading) Regulations, 2015",
+      "CATEGORYNAME": "Insider Trading / SAST",
+      "OLD": 1,
+      "RN": 1,
+      "PDFFLAG": 1,
+      "NSURL": "https://www.bseindia.com/stock-share-price/eternal-ltd/eternal/543320/",
+      "SLONGNAME": "Eternal Ltd",
+      "AGENDA_ID": 66,
+      "TotalPageCnt": 8,
+      "News_submission_dt": "2024-12-22T21:38:37",
+      "DissemDT": "2024-12-22T21:38:38.807",
+      "TimeDiff": "00:00:01",
+      "Fld_Attachsize": 206045,
+      "SUBCATNAME": "Closure of Trading Window",
+      "AUDIO_VIDEO_FILE": null
+    },
+    "sampleHeadlines": [
+      "[2024-12-22T21:38:38.807] 543320 Eternal Ltd: Zomato Limited has informed the exchange regarding trading window closure pursuant to SEBI (Prohibition of Insider Trading) Regulations, 201",
+      "[2024-12-22T16:23:18.317] 512565 Neelkanth Ltd-$: This is to inform you that in accordance with the Company''s Code of Conduct for Regualting, Reporting & Monitoring of Trading by insiders a",
+      "[2024-12-22T14:31:05.957] 543927 Asian Warehousing Ltd: This is to inform you that in accordance with Company ''s Code of Conduct for Regulating , Monitoring and Reporting of Trading by Insiders a",
+      "[2024-12-22T08:29:05.78] 540735 IRIS RegTech Solutions Ltd: IRIS Business Services Limited has informed about the Exchange about the closure of the Trading Windowas per SEBI (Prohibition of Insider Tr",
+      "[2024-12-21T23:00:40.853] 500388 Shree Krishna Paper Mills & In: Intimation of Closure of Trading Window",
+      "[2024-12-21T17:57:46.203] 512175 Vama Industries Ltd: we wish to inform you that a meeting of the Board of Directors of the company is scheduled to be held on 22.12.2024 at the registered office",
+      "[2024-12-21T17:18:23.557] 530063 Yashraj Containeurs Ltd: Closure of Trading Window.",
+      "[2024-12-21T16:49:00.783] 544310 Yash Highvoltage Ltd: Intimation of Closure of Trading Window"
+    ],
+    "topLevelKeys": [
+      "Table",
+      "Table1"
+    ]
+  },
+  "probe1b": {
+    "range": [
+      "20260420",
+      "20260511"
+    ],
+    "httpStatus": 200,
+    "upstreamStatus": "200",
+    "bodyLen": 54927,
+    "rowCount": 50,
+    "firstRowKeys": [
+      "NEWSID",
+      "SCRIP_CD",
+      "XML_NAME",
+      "NEWSSUB",
+      "DT_TM",
+      "NEWS_DT",
+      "CRITICALNEWS",
+      "ANNOUNCEMENT_TYPE",
+      "QUARTER_ID",
+      "FILESTATUS",
+      "ATTACHMENTNAME",
+      "MORE",
+      "HEADLINE",
+      "CATEGORYNAME",
+      "OLD",
+      "RN",
+      "PDFFLAG",
+      "NSURL",
+      "SLONGNAME",
+      "AGENDA_ID",
+      "TotalPageCnt",
+      "News_submission_dt",
+      "DissemDT",
+      "TimeDiff",
+      "Fld_Attachsize",
+      "SUBCATNAME",
+      "AUDIO_VIDEO_FILE"
+    ],
+    "firstRow": {
+      "NEWSID": "70287ed6-f0dd-4935-89e3-73f5f8a90302",
+      "SCRIP_CD": 509496,
+      "XML_NAME": "ANN_509496_70287ED6-F0DD-4935-89E3-73F5F8A90302",
+      "NEWSSUB": "Cemindia Projects Ltd - 509496 - Closure of Trading Window",
+      "DT_TM": "2026-05-11T20:38:04.43",
+      "NEWS_DT": "2026-05-11T20:38:04.43",
+      "CRITICALNEWS": 0,
+      "ANNOUNCEMENT_TYPE": "A",
+      "QUARTER_ID": null,
+      "FILESTATUS": "N    ",
+      "ATTACHMENTNAME": "49e3e946-f82b-4398-a404-9123cf8fc237.pdf",
+      "MORE": "",
+      "HEADLINE": "Intimation for Closure of Trading Window",
+      "CATEGORYNAME": "Insider Trading / SAST",
+      "OLD": 1,
+      "RN": 1,
+      "PDFFLAG": 0,
+      "NSURL": "https://www.bseindia.com/stock-share-price/cemindia-projects-ltd/cempro/509496/",
+      "SLONGNAME": "Cemindia Projects Ltd",
+      "AGENDA_ID": 66,
+      "TotalPageCnt": 8,
+      "News_submission_dt": "2026-05-11T20:38:04",
+      "DissemDT": "2026-05-11T20:38:04.43",
+      "TimeDiff": "00:00:00",
+      "Fld_Attachsize": 418063,
+      "SUBCATNAME": "Closure of Trading Window",
+      "AUDIO_VIDEO_FILE": null
+    },
+    "sampleHeadlines": [
+      "[2026-05-11T20:38:04.43] 509496 Cemindia Projects Ltd: Intimation for Closure of Trading Window",
+      "[2026-05-11T19:47:06.247] 532271 Orchasp Ltd: The Exchange has received the disclosure under Regulation 29(2) of SEBI (Substantial Acquisition of Shares & Takeovers) Regulations, 2011 fo",
+      "[2026-05-11T19:45:52.617] 544600 Lenskart Solutions Ltd: The Exchange has received the disclosure under Regulation 29(2) of SEBI (Substantial Acquisition of Shares & Takeovers) Regulations, 2011 fo",
+      "[2026-05-11T19:44:41.2] 532702 Gujarat State Petronet Ltd: The Exchange has received the disclosure under Regulation 29(1) of SEBI (Substantial Acquisition of Shares & Takeovers) Regulations, 2011 fo",
+      "[2026-05-11T19:42:50.51] 544333 Standard Engineering Technolog: The Exchange has received the disclosure under Regulation 29(1) of SEBI (Substantial Acquisition of Shares & Takeovers) Regulations, 2011 fo",
+      "[2026-05-11T19:41:16.107] 538556 Arman Holdings Ltd: The Exchange has received the disclosure under Regulation 29(2) of SEBI (Substantial Acquisition of Shares & Takeovers) Regulations, 2011 fo",
+      "[2026-05-11T17:34:07.463] 520111 Ratnamani Metals & Tubes Ltd-$: UPDATE AND REVISION IN CLOSURE OF TRADING WINDOW ON ACCOUNT OF FIXATION OF DATE OF BOARD MEETING",
+      "[2026-05-11T17:31:31.463] 532155 Gail (India) Ltd: In continuation of our letter of even no. dated 27th March, 2026, specifying the closure of Trading Window for the Designated Persons and th"
+    ],
+    "topLevelKeys": [
+      "Table",
+      "Table1"
+    ]
+  },
+  "probe2": [
+    {
+      "path": "/BseIndiaAPI/api/InsiderTrading_New/w",
+      "params": {
+        "Scripcode": "543320",
+        "Fdate": "20260420",
+        "Tdate": "20260511",
+        "Sno": "",
+        "pageno": "1"
+      },
+      "httpStatus": 200,
+      "upstreamStatus": "200",
+      "bodyLen": 1814,
+      "bodySnippet": "\r\n\r\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\r\n<head runat=\"server\"> \r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />\r\n    <meta name=\"viewport\" content=\"width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;\" />\r\n    <meta name=\"apple-mobile-web-app-capable\" content=\"yes\" />\r\n    <meta name=\"HandheldFriendly\" content=\"true\" />\r\n    <meta name=\"MobileOptimized\" content=\"width\" />\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EmulateIE7, IE=EmulateIE8, IE=EmulateIE9, IE=EmulateIE10, IE=EmulateIE11 \">\r\n    <title></title>\r\n     \r\n\r\n</head>\r\n<body>\r\n    <form id=\"form1\" runat=\"server\">\r\n    <div class=\"wrap\">\r\n     <br /><br />\r\n        <div class=\"container\" align=\"center\">\r\n            <div class=\"row\">\r\n                <div class=\"col-lg-12 text-center\"><img src=\"/include/images/bselogo.png\" class=\"bselogomob\" alt=\"BSEINDIA\" title=\"BSEINDIA\" border=\"0\" /></div>\r\n            </div>\r\n\r\n            <div class=\"row\">\r\n            "
+    },
+    {
+      "path": "/BseIndiaAPI/api/InsiderTradingData/w",
+      "params": {
+        "scripcd": "543320",
+        "fromdate": "20260420",
+        "todate": "20260511"
+      },
+      "httpStatus": 200,
+      "upstreamStatus": "200",
+      "bodyLen": 1814,
+      "bodySnippet": "\r\n\r\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\r\n<head runat=\"server\"> \r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />\r\n    <meta name=\"viewport\" content=\"width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;\" />\r\n    <meta name=\"apple-mobile-web-app-capable\" content=\"yes\" />\r\n    <meta name=\"HandheldFriendly\" content=\"true\" />\r\n    <meta name=\"MobileOptimized\" content=\"width\" />\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EmulateIE7, IE=EmulateIE8, IE=EmulateIE9, IE=EmulateIE10, IE=EmulateIE11 \">\r\n    <title></title>\r\n     \r\n\r\n</head>\r\n<body>\r\n    <form id=\"form1\" runat=\"server\">\r\n    <div class=\"wrap\">\r\n     <br /><br />\r\n        <div class=\"container\" align=\"center\">\r\n            <div class=\"row\">\r\n                <div class=\"col-lg-12 text-center\"><img src=\"/include/images/bselogo.png\" class=\"bselogomob\" alt=\"BSEINDIA\" title=\"BSEINDIA\" border=\"0\" /></div>\r\n            </div>\r\n\r\n            <div class=\"row\">\r\n            "
+    },
+    {
+      "path": "/BseIndiaAPI/api/InsiderTrading/w",
+      "params": {
+        "scripcode": "543320",
+        "FromDate": "20260420",
+        "ToDate": "20260511"
+      },
+      "httpStatus": 200,
+      "upstreamStatus": "200",
+      "bodyLen": 1814,
+      "bodySnippet": "\r\n\r\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\r\n<head runat=\"server\"> \r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />\r\n    <meta name=\"viewport\" content=\"width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;\" />\r\n    <meta name=\"apple-mobile-web-app-capable\" content=\"yes\" />\r\n    <meta name=\"HandheldFriendly\" content=\"true\" />\r\n    <meta name=\"MobileOptimized\" content=\"width\" />\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EmulateIE7, IE=EmulateIE8, IE=EmulateIE9, IE=EmulateIE10, IE=EmulateIE11 \">\r\n    <title></title>\r\n     \r\n\r\n</head>\r\n<body>\r\n    <form id=\"form1\" runat=\"server\">\r\n    <div class=\"wrap\">\r\n     <br /><br />\r\n        <div class=\"container\" align=\"center\">\r\n            <div class=\"row\">\r\n                <div class=\"col-lg-12 text-center\"><img src=\"/include/images/bselogo.png\" class=\"bselogomob\" alt=\"BSEINDIA\" title=\"BSEINDIA\" border=\"0\" /></div>\r\n            </div>\r\n\r\n            <div class=\"row\">\r\n            "
+    },
+    {
+      "path": "/BseIndiaAPI/api/SearchSastCompanyEbo/w",
+      "params": {
+        "scripcode": "543320",
+        "fdate": "20260420",
+        "tdate": "20260511"
+      },
+      "httpStatus": 200,
+      "upstreamStatus": "200",
+      "bodyLen": 1814,
+      "bodySnippet": "\r\n\r\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\r\n\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\r\n<head runat=\"server\"> \r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\r\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />\r\n    <meta name=\"viewport\" content=\"width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;\" />\r\n    <meta name=\"apple-mobile-web-app-capable\" content=\"yes\" />\r\n    <meta name=\"HandheldFriendly\" content=\"true\" />\r\n    <meta name=\"MobileOptimized\" content=\"width\" />\r\n    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=EmulateIE7, IE=EmulateIE8, IE=EmulateIE9, IE=EmulateIE10, IE=EmulateIE11 \">\r\n    <title></title>\r\n     \r\n\r\n</head>\r\n<body>\r\n    <form id=\"form1\" runat=\"server\">\r\n    <div class=\"wrap\">\r\n     <br /><br />\r\n        <div class=\"container\" align=\"center\">\r\n            <div class=\"row\">\r\n                <div class=\"col-lg-12 text-center\"><img src=\"/include/images/bselogo.png\" class=\"bselogomob\" alt=\"BSEINDIA\" title=\"BSEINDIA\" border=\"0\" /></div>\r\n            </div>\r\n\r\n            <div class=\"row\">\r\n            "
+    },
+    {
+      "path": "/BseIndiaAPI/api/AnnSubCategoryGetData/w",
+      "params": {
+        "pageno": "1",
+        "strCat": "Insider Trading / SAST",
+        "strPrevDate": "20260420",
+        "strToDate": "20260511",
+        "strScrip": "543320",
+        "strSearch": "P",
+        "strType": "C",
+        "subcategory": "Acquisition/Disposal under SEBI (Prohibition of Insider Trading) Regulations, 2015"
+      },
+      "httpStatus": 200,
+      "upstreamStatus": "200",
+      "bodyLen": 36,
+      "bodySnippet": "{\"Table\":[],\"Table1\":[{\"ROWCNT\":0}]}"
+    }
+  ],
+  "probe3": {
+    "attachment": "6586e524-23de-4031-b265-7888da947895.pdf",
+    "attempts": [
+      {
+        "url": "https://www.bseindia.com/xml-data/corpfiling/AttachLive/6586e524-23de-4031-b265-7888da947895.pdf",
+        "httpStatus": 404,
+        "contentType": "text/html; charset=utf-8",
+        "bytes": 8406,
+        "first24Hex": "0d0a0d0a3c21444f43545950452068746d6c205055424c49",
+        "isPdf": false
+      },
+      {
+        "url": "https://www.bseindia.com/xml-data/corpfiling/AttachHis/6586e524-23de-4031-b265-7888da947895.pdf",
+        "httpStatus": 200,
+        "contentType": "application/pdf",
+        "bytes": 206045,
+        "first24Hex": "255044462d312e370d25e2e3cfd30d0a35362030206f626a",
+        "isPdf": true
+      }
+    ]
+  }
+}
