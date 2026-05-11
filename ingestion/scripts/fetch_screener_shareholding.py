@@ -171,8 +171,6 @@ def fetch_screener_html(symbol: str, session: requests.Session) -> str | None:
                 log(f"    {target_path}: 200 but no 'Shareholding Pattern' text ({len(body)} chars)")
                 _dump_response(symbol, "no_sh_text", body)
                 continue
-            # Success path — dump only the first success too so we can verify parsing
-            _dump_response(symbol, "ok", body)
             return body
         except requests.RequestException as e:
             log(f"    {target_path}: {type(e).__name__}: {e}")

@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react'
+import { useMemo } from 'react'
 import {
   Bar,
   CartesianGrid,
@@ -24,7 +25,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { CompanyOverview, OwnershipTrendsData } from '../types'
+import type { CompanyOverview, HeatmapCell, HeatmapRow, OwnershipTrendsData } from '../types'
 import HolderMovementHeatmap from './HolderMovementHeatmap'
 import HolderMovementTable from './HolderMovementTable'
 import DataBadge from './DataBadge'
@@ -87,6 +88,44 @@ export default function OwnershipTrendsTab({ overview, trends, shareholdingLive,
   const reducers = sortedHolders.filter((h) => h.changePct < 0).slice(-5).reverse()
 
   const last4Quarters = ownership20q.slice(-4).map((q) => q.quarter)
+
+  // When shareholding is live, compute the heatmap from the live ownership
+  // series (Promoter/FII/DII/Public QoQ deltas) instead of mock.
+  const liveHeatmap = useMemo(() => {
+    if (!shareholdingLive) return null
+    const series = ownership20q.slice(-9) // 9 points → 8 deltas
+    if (series.length < 2) return null
+    const buckets: Array<{ key: 'promoter' | 'fii' | 'dii' | 'public'; label: HeatmapRow['bucket'] }> = [
+      { key: 'promoter', label: 'Promoter' },
+      { key: 'fii', label: 'FII' },
+      { key: 'dii', label: 'DII' },
+      { key: 'public', label: 'Public' },
+    ]
+    const quarters = series.slice(1).map((q) => q.quarter)
+    const rows: HeatmapRow[] = buckets.map(({ key, label }) => {
+      const cells: HeatmapCell[] = []
+      let prevDelta = 0
+      for (let i = 1; i < series.length; i++) {
+        const delta = +(series[i][key] - series[i - 1][key]).toFixed(2)
+        const flipped =
+          i > 1 &&
+          Math.sign(delta) !== 0 &&
+          Math.sign(prevDelta) !== 0 &&
+          Math.sign(delta) !== Math.sign(prevDelta) &&
+          Math.abs(delta) > 0.12
+        let state: HeatmapCell['state']
+        if (Math.abs(delta) < 0.06) state = 'stable'
+        else if (flipped) state = 'watch'
+        else state = delta > 0 ? 'up' : 'down'
+        cells.push({ delta, state })
+        prevDelta = delta
+      }
+      return { bucket: label, cells }
+    })
+    return { quarters, rows }
+  }, [shareholdingLive, ownership20q])
+
+  const effectiveHeatmap = liveHeatmap || heatmap
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-6 py-6">
@@ -227,9 +266,16 @@ export default function OwnershipTrendsTab({ overview, trends, shareholdingLive,
       <section className="animate-fadeUp">
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
           <span>Movement heatmap</span>
-          <DataBadge state="mock" hint="Derived from mock ownership trend" />
+          <DataBadge
+            state={shareholdingLive ? 'live' : 'mock'}
+            hint={
+              shareholdingLive
+                ? `QoQ deltas computed from live ${shareholdingSource || 'Screener.in'} shareholding`
+                : 'Derived from mock ownership trend'
+            }
+          />
         </div>
-        <HolderMovementHeatmap quarters={heatmap.quarters} rows={heatmap.rows} />
+        <HolderMovementHeatmap quarters={effectiveHeatmap.quarters} rows={effectiveHeatmap.rows} />
       </section>
 
       {/* === 4. HOLDER TABLE === */}
@@ -323,7 +369,14 @@ export default function OwnershipTrendsTab({ overview, trends, shareholdingLive,
               <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">
                 Final ownership trends read
               </div>
-              <DataBadge state="mock" />
+              <DataBadge
+                state={shareholdingLive ? 'mixed' : 'mock'}
+                hint={
+                  shareholdingLive
+                    ? `Numbers live from ${shareholdingSource || 'Screener.in'}, narrative still mock`
+                    : undefined
+                }
+              />
             </div>
             <p className="mt-1 max-w-3xl text-[15px] leading-relaxed text-ink-800">{story.finalRead}</p>
             <div className="mt-4 flex flex-wrap gap-2">
