@@ -111,9 +111,17 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals, liveInsid
   // when the BSE pipeline has run for this ticker but found no filings in the
   // last 14 days, we show an empty state instead of misleading mock rows.
   const liveInsiderRows = liveInsider?.rows ?? []
-  const liveInsiderActive = !!liveInsider
   const usingLiveInsider = liveInsiderRows.length > 0
-  const liveInsiderEmpty = liveInsiderActive && !usingLiveInsider
+  // `live.insider` is null both when the pipeline didn't run AND when it ran
+  // but found zero filings for this ticker (the aggregator skips per-ticker
+  // writes when rows are empty). Use livePrices — written by the same daily
+  // workflow — as the "pipeline ran for this ticker" signal so NIFTY-mapped
+  // tickers with no filings show the empty card instead of falling back to
+  // mock. Without this, only tickers that happened to file in the window
+  // ever show LIVE, which understates pipeline coverage.
+  const livePricesActive = !!livePrices && livePrices.rows.length > 0
+  const liveInsiderEmpty = livePricesActive && !usingLiveInsider
+  const liveSymbol = liveInsider?.symbol ?? livePrices?.symbol ?? ''
 
   const liveDealsCount =
     (liveDeals?.bulk?.rows?.length ?? 0) + (liveDeals?.block?.rows?.length ?? 0)
@@ -340,9 +348,9 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals, liveInsid
           />
         </div>
         {usingLiveInsider ? (
-          <LiveFilingsTable rows={liveInsiderRows} symbol={liveInsider!.symbol} />
+          <LiveFilingsTable rows={liveInsiderRows} symbol={liveSymbol} />
         ) : liveInsiderEmpty ? (
-          <LiveFilingsEmpty symbol={liveInsider!.symbol} />
+          <LiveFilingsEmpty symbol={liveSymbol} />
         ) : (
           <InsiderTransactionTable trades={trades} />
         )}
