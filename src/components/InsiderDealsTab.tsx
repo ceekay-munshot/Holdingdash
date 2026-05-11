@@ -109,7 +109,7 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals, liveInsid
 
   // Three-way live insider filing state. Mirrors the bulk/block deal pattern:
   // when the BSE pipeline has run for this ticker but found no filings in the
-  // last 14 days, we show an empty state instead of misleading mock rows.
+  // last 90 days, we show an empty state instead of misleading mock rows.
   const liveInsiderRows = liveInsider?.rows ?? []
   const usingLiveInsider = liveInsiderRows.length > 0
   // `live.insider` is null both when the pipeline didn't run AND when it ran
@@ -206,7 +206,7 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals, liveInsid
                   usingLiveInsider
                     ? 'Live BSE filings power the table below; the narrative signal here is still derived from mock per-trade data (NSE corporates-pit blocks GitHub IPs).'
                     : liveInsiderEmpty
-                    ? 'Live BSE filings pipeline active for this ticker — no filings in last 14 days. Narrative signal is mock.'
+                    ? 'Live BSE filings pipeline active for this ticker — no filings in last 90 days. Narrative signal is mock.'
                     : 'Signal derived from mock insider trades — NSE blocks GitHub IPs'
                 }
               />
@@ -340,9 +340,9 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals, liveInsid
             state={usingLiveInsider || liveInsiderEmpty ? 'live' : 'mock'}
             hint={
               usingLiveInsider
-                ? `Live from BSE — ${liveInsiderRows.length} filings in last 14 days, refreshed daily`
+                ? `Live from BSE — ${liveInsiderRows.length} filings in last 90 days, refreshed daily`
                 : liveInsiderEmpty
-                ? 'Live BSE filings pipeline active. No insider-related filings for this ticker in last 14 days.'
+                ? 'Live BSE filings pipeline active. No insider-related filings for this ticker in last 90 days.'
                 : 'NSE corporates-pit API blocks GitHub IPs — mock for now'
             }
           />
@@ -430,14 +430,14 @@ function LiveFilingsEmpty({ symbol }: { symbol: string }) {
           <Wifi className="h-5 w-5" />
         </div>
         <h3 className="mt-3 text-lg font-semibold text-ink-900">
-          No insider-related filings for {symbol} in the last 14 days
+          No insider-related filings for {symbol} in the last 90 days
         </h3>
         <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-ink-700">
           The BSE insider-filing pipeline is live for this ticker — we just
-          didn't find any filing under "Insider Trading / SAST" in the last 14
-          days. That's typical outside earnings + trading-window-closure
-          windows. The transactions table is hidden so we don't show mock data
-          while the live pipeline is up.
+          didn't find any filing under "Insider Trading / SAST" in the last 90
+          days. Many large stable companies file under PIT / SAST only once or
+          twice a year, so a 90-day silence is normal. The transactions table
+          is hidden so we don't show mock data while the live pipeline is up.
         </p>
       </div>
     </section>

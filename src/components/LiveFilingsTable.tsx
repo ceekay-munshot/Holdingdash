@@ -128,7 +128,7 @@ export default function LiveFilingsTable({ rows, symbol }: Props) {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-            Insider-related filings · last 14 days
+            Insider-related filings · last 90 days
           </div>
           <h3 className="text-lg font-semibold text-ink-900">
             {symbol}: {enriched.length} filing{enriched.length === 1 ? '' : 's'} from BSE

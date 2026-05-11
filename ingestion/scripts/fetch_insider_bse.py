@@ -41,8 +41,10 @@ from ingestion.utils.storage import read_json, write_json, log  # noqa: E402
 PROXY = os.environ.get("BSE_PROXY_URL")
 SECRET = os.environ.get("BSE_PROXY_SECRET")
 
-LOOKBACK_DAYS = 14
-PAGE_LIMIT = 20  # 50 rows/page × 20 = 1000 max — comfortable for 14 days
+LOOKBACK_DAYS = 90
+# 50 rows/page × 50 = 2500 row cap. Observed volume: ~260 filings / 14 days
+# across all BSE listings ⇒ ~1700 / 90 days. 50 pages gives ~50% headroom.
+PAGE_LIMIT = 50
 ATTACH_URL = "https://www.bseindia.com/xml-data/corpfiling/AttachHis/{}"
 
 
