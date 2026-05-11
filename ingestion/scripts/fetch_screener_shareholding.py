@@ -113,10 +113,35 @@ def _classify_label(label: str) -> str | None:
     return None
 
 
+_DEBUG_REMAINING = {"count": 3}  # module-level: dump first 3 responses (any outcome)
+
+
+def _dump_response(symbol: str, suffix: str, body: str) -> None:
+    """Save raw HTML/body to data/debug/screener/ for offline inspection."""
+    if _DEBUG_REMAINING["count"] <= 0:
+        return
+    try:
+        out_dir = Path(os.environ.get("OUT_DIR", "data-out"))
+        debug_dir = out_dir / "debug" / "screener"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        file_path = debug_dir / f"{symbol}_{suffix}.html"
+        with file_path.open("w", encoding="utf-8") as f:
+            f.write(f"<!-- symbol: {symbol} -->\n")
+            f.write(f"<!-- suffix: {suffix} -->\n")
+            f.write(f"<!-- length: {len(body)} chars -->\n")
+            f.write(f"<!-- ts: {datetime.now(timezone.utc).isoformat()} -->\n")
+            f.write(body)
+        log(f"    [{symbol}] DUMPED -> debug/screener/{symbol}_{suffix}.html ({len(body)} chars)")
+        _DEBUG_REMAINING["count"] -= 1
+    except Exception as e:
+        log(f"    [{symbol}] failed to dump: {e}")
+
+
 def fetch_screener_html(symbol: str, session: requests.Session) -> str | None:
     """Fetch Screener page HTML through the Worker proxy.
 
     Tries /consolidated/ first, falls back to plain /company/{SYMBOL}/.
+    Dumps raw response to debug/ when within the dump budget.
     """
     if not BSE_PROXY_URL:
         log(f"  no BSE_PROXY_URL set — cannot reach Screener")
@@ -133,16 +158,22 @@ def fetch_screener_html(symbol: str, session: requests.Session) -> str | None:
         try:
             r = session.get(url, headers=headers, timeout=45)
             upstream = r.headers.get("X-Upstream-Status", "?")
+            body = r.text or ""
             if r.status_code != 200:
                 log(f"    {target_path}: HTTP {r.status_code} (upstream {upstream})")
+                _dump_response(symbol, f"http{r.status_code}", body)
                 continue
-            if not r.text or len(r.text) < 1000:
-                log(f"    {target_path}: short body ({len(r.text)} chars)")
+            if not body or len(body) < 1000:
+                log(f"    {target_path}: short body ({len(body)} chars)")
+                _dump_response(symbol, "short", body)
                 continue
-            if "Shareholding Pattern" not in r.text:
-                log(f"    {target_path}: page loaded ({len(r.text)} chars) but no 'Shareholding Pattern' string")
+            if "Shareholding Pattern" not in body:
+                log(f"    {target_path}: 200 but no 'Shareholding Pattern' text ({len(body)} chars)")
+                _dump_response(symbol, "no_sh_text", body)
                 continue
-            return r.text
+            # Success path — dump only the first success too so we can verify parsing
+            _dump_response(symbol, "ok", body)
+            return body
         except requests.RequestException as e:
             log(f"    {target_path}: {type(e).__name__}: {e}")
     return None
