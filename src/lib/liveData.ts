@@ -110,6 +110,30 @@ export interface LiveShareholding {
   quarters: LiveShareholdingQuarter[]
 }
 
+export type TopHolderCategory =
+  | 'foreign_institutions'
+  | 'domestic_institutions'
+  | 'public'
+  | 'government'
+
+/** Per-holder map: period label ("Mar 2024") → percent string ("1.54"). Plus an
+ *  optional __personUrl pointing at Screener's holder detail page. */
+export interface LiveHolderPeriods {
+  [period: string]: string
+}
+
+export interface LiveTopHolders {
+  symbol: string
+  source: string
+  updated: string
+  screenerCompanyId: string
+  categories: {
+    [cat in TopHolderCategory]?: {
+      [holderName: string]: LiveHolderPeriods
+    }
+  }
+}
+
 /* ===== fetch helpers ===== */
 
 const memoryCache = new Map<string, unknown>()
@@ -163,6 +187,10 @@ export function fetchTickerInsider(symbol: string): Promise<LiveInsiderBundle | 
 
 export function fetchTickerShareholding(symbol: string): Promise<LiveShareholding | null> {
   return fetchJson<LiveShareholding>(`by_ticker/${encodeURIComponent(symbol)}/shareholding.json`)
+}
+
+export function fetchTickerTopHolders(symbol: string): Promise<LiveTopHolders | null> {
+  return fetchJson<LiveTopHolders>(`by_ticker/${encodeURIComponent(symbol)}/top_holders.json`)
 }
 
 /** Strips the .NS suffix used in the dashboard's internal ticker format. */

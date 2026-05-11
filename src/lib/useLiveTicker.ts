@@ -4,11 +4,13 @@ import {
   fetchTickerInsider,
   fetchTickerPrices,
   fetchTickerShareholding,
+  fetchTickerTopHolders,
   symbolFromTicker,
   type LiveDealsBundle,
   type LiveInsiderBundle,
   type LivePriceHistory,
   type LiveShareholding,
+  type LiveTopHolders,
 } from './liveData'
 
 export interface LiveTickerState {
@@ -17,6 +19,7 @@ export interface LiveTickerState {
   deals: LiveDealsBundle | null
   insider: LiveInsiderBundle | null
   shareholding: LiveShareholding | null
+  topHolders: LiveTopHolders | null
   /** Latest non-null source timestamp across the bundles, for the freshness badge. */
   latestSourceDate: string | null
 }
@@ -33,6 +36,7 @@ export function useLiveTicker(ticker: string | null): LiveTickerState {
     deals: null,
     insider: null,
     shareholding: null,
+    topHolders: null,
     latestSourceDate: null,
   })
 
@@ -44,6 +48,7 @@ export function useLiveTicker(ticker: string | null): LiveTickerState {
         deals: null,
         insider: null,
         shareholding: null,
+        topHolders: null,
         latestSourceDate: null,
       })
       return
@@ -57,13 +62,22 @@ export function useLiveTicker(ticker: string | null): LiveTickerState {
       fetchTickerDeals(symbol).catch(() => null),
       fetchTickerInsider(symbol).catch(() => null),
       fetchTickerShareholding(symbol).catch(() => null),
-    ]).then(([prices, deals, insider, shareholding]) => {
+      fetchTickerTopHolders(symbol).catch(() => null),
+    ]).then(([prices, deals, insider, shareholding, topHolders]) => {
       if (cancelled) return
       let latest: string | null = null
       if (prices && prices.rows.length > 0) {
         latest = prices.rows[prices.rows.length - 1].date
       }
-      setState({ loading: false, prices, deals, insider, shareholding, latestSourceDate: latest })
+      setState({
+        loading: false,
+        prices,
+        deals,
+        insider,
+        shareholding,
+        topHolders,
+        latestSourceDate: latest,
+      })
     })
     return () => {
       cancelled = true

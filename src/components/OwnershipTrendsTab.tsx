@@ -25,7 +25,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { CompanyOverview, HeatmapCell, HeatmapRow, OwnershipTrendsData } from '../types'
+import type {
+  BreadthPoint,
+  CompanyOverview,
+  HeatmapCell,
+  HeatmapRow,
+  HolderRow,
+  HolderSignal,
+  HolderType,
+  OwnershipTrendsData,
+} from '../types'
+import type { LiveTopHolders, TopHolderCategory } from '../lib/liveData'
 import HolderMovementHeatmap from './HolderMovementHeatmap'
 import HolderMovementTable from './HolderMovementTable'
 import DataBadge from './DataBadge'
@@ -35,6 +45,102 @@ interface Props {
   trends: OwnershipTrendsData
   shareholdingLive?: boolean
   shareholdingSource?: string
+  liveTopHolders?: LiveTopHolders | null
+}
+
+const CATEGORY_TO_TYPE: Record<TopHolderCategory, HolderType> = {
+  foreign_institutions: 'FII',
+  domestic_institutions: 'DII',
+  public: 'Individual',
+  government: 'DII',
+}
+
+const MONTH_MAP: Record<string, number> = {
+  Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+  Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
+}
+
+function periodToIso(period: string): string | null {
+  const m = /^([A-Z][a-z]{2})\s+(\d{4})$/.exec(period.trim())
+  if (!m) return null
+  const mon = MONTH_MAP[m[1]]
+  if (!mon) return null
+  return `${m[2]}-${String(mon).padStart(2, '0')}`
+}
+
+function classifySignal(prev: number | null, change: number): HolderSignal {
+  if (prev === null) return 'New Entry'
+  if (Math.abs(change) < 0.04) return 'Stable'
+  if (change >= 0.18) return 'Accumulating'
+  if (change <= -0.18) return 'Reducing'
+  if (change <= -0.06) return 'Watch'
+  return change > 0 ? 'Accumulating' : 'Reducing'
+}
+
+function flattenLiveTopHolders(top: LiveTopHolders): HolderRow[] {
+  const rows: HolderRow[] = []
+  for (const [cat, holders] of Object.entries(top.categories)) {
+    if (!holders) continue
+    const type = CATEGORY_TO_TYPE[cat as TopHolderCategory] ?? 'Individual'
+    for (const [name, periods] of Object.entries(holders)) {
+      const dated = Object.entries(periods)
+        .filter(([k]) => k !== '__personUrl')
+        .map(([k, v]) => {
+          const iso = periodToIso(k)
+          const pct = parseFloat(String(v))
+          if (!iso || Number.isNaN(pct)) return null
+          return { period: k, iso, pct }
+        })
+        .filter((x): x is { period: string; iso: string; pct: number } => !!x)
+        .sort((a, b) => (a.iso < b.iso ? -1 : 1))
+      if (dated.length === 0) continue
+      const last = dated[dated.length - 1]
+      const prev = dated.length >= 2 ? dated[dated.length - 2] : null
+      const change = prev ? +(last.pct - prev.pct).toFixed(2) : +last.pct.toFixed(2)
+      rows.push({
+        name,
+        type,
+        prevPct: prev ? prev.pct : null,
+        currPct: last.pct,
+        changePct: change,
+        signal: classifySignal(prev ? prev.pct : null, change),
+      })
+    }
+  }
+  // Sort by abs change desc so movers are at top
+  return rows.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))
+}
+
+function computeLiveBreadth(top: LiveTopHolders): BreadthPoint[] {
+  const allPeriods = new Set<string>()
+  const holdersPerPeriod: Record<string, Set<string>> = {}
+  for (const holders of Object.values(top.categories)) {
+    if (!holders) continue
+    for (const [name, periods] of Object.entries(holders)) {
+      for (const period of Object.keys(periods)) {
+        if (period === '__personUrl') continue
+        allPeriods.add(period)
+        if (!holdersPerPeriod[period]) holdersPerPeriod[period] = new Set()
+        holdersPerPeriod[period].add(name)
+      }
+    }
+  }
+  const sorted = [...allPeriods].sort((a, b) => {
+    const ai = periodToIso(a) ?? a
+    const bi = periodToIso(b) ?? b
+    return ai < bi ? -1 : 1
+  })
+  const points: BreadthPoint[] = []
+  for (let i = 1; i < sorted.length; i++) {
+    const currSet = holdersPerPeriod[sorted[i]] ?? new Set()
+    const prevSet = holdersPerPeriod[sorted[i - 1]] ?? new Set()
+    let newEntries = 0
+    let exits = 0
+    currSet.forEach((n) => { if (!prevSet.has(n)) newEntries += 1 })
+    prevSet.forEach((n) => { if (!currSet.has(n)) exits += 1 })
+    points.push({ quarter: sorted[i], newEntries, exits, net: newEntries - exits })
+  }
+  return points
 }
 
 const STATUS_CHROME = {
@@ -76,14 +182,34 @@ const STATUS_CHROME = {
   },
 } as const
 
-export default function OwnershipTrendsTab({ overview, trends, shareholdingLive, shareholdingSource }: Props) {
+export default function OwnershipTrendsTab({
+  overview,
+  trends,
+  shareholdingLive,
+  shareholdingSource,
+  liveTopHolders,
+}: Props) {
   const { story, heatmap, holders, breadth } = trends
   const { ownership20q } = overview
   const chrome = STATUS_CHROME[story.status]
   const StatusIcon = chrome.icon
 
-  // accumulators / reducers — derived from holders
-  const sortedHolders = [...holders].sort((a, b) => b.changePct - a.changePct)
+  // Live derivations when topHolders is available
+  const liveHolders = useMemo(
+    () => (liveTopHolders ? flattenLiveTopHolders(liveTopHolders) : null),
+    [liveTopHolders],
+  )
+  const liveBreadth = useMemo(
+    () => (liveTopHolders ? computeLiveBreadth(liveTopHolders) : null),
+    [liveTopHolders],
+  )
+  const topHoldersLive = !!liveHolders && liveHolders.length > 0
+
+  const effectiveHolders = liveHolders ?? holders
+  const effectiveBreadth = liveBreadth && liveBreadth.length > 0 ? liveBreadth : breadth
+
+  // accumulators / reducers — derived from effective holders
+  const sortedHolders = [...effectiveHolders].sort((a, b) => b.changePct - a.changePct)
   const accumulators = sortedHolders.filter((h) => h.changePct > 0).slice(0, 5)
   const reducers = sortedHolders.filter((h) => h.changePct < 0).slice(-5).reverse()
 
@@ -282,15 +408,22 @@ export default function OwnershipTrendsTab({ overview, trends, shareholdingLive,
       <section className="animate-fadeUp">
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
           <span>Top holder movement</span>
-          <DataBadge state="mock" hint="Holder list and changes are mock — comes free with shareholding data" />
+          <DataBadge
+            state={topHoldersLive ? 'live' : 'mock'}
+            hint={
+              topHoldersLive
+                ? `Top named institutional holders from ${shareholdingSource || 'Screener.in'}`
+                : 'Holder list and changes are mock'
+            }
+          />
         </div>
-        <HolderMovementTable holders={holders} />
+        <HolderMovementTable holders={effectiveHolders} />
       </section>
 
       {/* === 5. ACCUMULATORS vs REDUCERS === */}
       <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
         <span>Accumulators vs Reducers</span>
-        <DataBadge state="mock" />
+        <DataBadge state={topHoldersLive ? 'live' : 'mock'} />
       </div>
       <section className="grid gap-4 md:grid-cols-2 animate-fadeUp">
         <AccumReduceCard
@@ -319,16 +452,23 @@ export default function OwnershipTrendsTab({ overview, trends, shareholdingLive,
               <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
                 Institutional breadth
               </div>
-              <DataBadge state="mock" />
+              <DataBadge
+                state={topHoldersLive ? 'mixed' : 'mock'}
+                hint={
+                  topHoldersLive
+                    ? `Counts derived from live top-N holders — true breadth needs full list`
+                    : 'Mock entries / exits'
+                }
+              />
             </div>
             <h3 className="text-lg font-semibold text-ink-900">New entries vs exits</h3>
           </div>
-          <BreadthSummary points={breadth} />
+          <BreadthSummary points={effectiveBreadth} />
         </div>
 
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={breadth} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
+            <ComposedChart data={effectiveBreadth} margin={{ top: 4, right: 12, left: 0, bottom: 4 }}>
               <defs>
                 <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />

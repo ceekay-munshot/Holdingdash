@@ -180,6 +180,7 @@ export default function App() {
               trends={trends}
               shareholdingLive={isShareholdingLive}
               shareholdingSource={live.shareholding?.source}
+              liveTopHolders={live.topHolders}
             />
           )}
           {activeTab === 'insider' && (

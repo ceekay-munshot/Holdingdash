@@ -1,35 +1,20 @@
-"""Fetch shareholding patterns from Screener.in via the Cloudflare Worker proxy.
+"""Fetch shareholding patterns + top institutional holders from Screener.in.
 
-Screener.in has clean per-company pages at /company/{SYMBOL}/consolidated/
-containing a "Shareholding Pattern" section with the last ~10 quarters
-broken down by Promoter / FII / DII / Public / Government / Others.
+Two passes per ticker, routed through the Cloudflare Worker proxy:
 
-This script routes through the Cloudflare Worker proxy (BSE_PROXY_URL
-env var — same proxy we use for BSE, now multi-host capable). Direct
-GitHub-IP requests to Screener typically 403; via the Worker they pass.
+  1. /company/{SYMBOL}/consolidated/ → parse 12-quarter Shareholding Pattern
+     into Promoter/FII/DII/Public/Government/Others buckets.
+     → by_ticker/{SYMBOL}/shareholding.json
 
-Output:
-  by_ticker/{SYMBOL}/shareholding.json  - per-ticker rollup with quarters
+  2. /api/3/{SCREENER_ID}/investors/{category}/quarterly/ → JSON with
+     each named top holder's percentage per quarter, for 4 categories
+     (foreign_institutions, domestic_institutions, public, government).
+     SCREENER_ID is extracted from the page HTML via /company/{ID}/add/
+     pattern.
+     → by_ticker/{SYMBOL}/top_holders.json
 
-Schema:
-  {
-    "symbol": "RELIANCE",
-    "source": "Screener.in",
-    "updated": "2026-05-11T...",
-    "count": 10,
-    "quarters": [
-      {
-        "period": "Mar 2024",
-        "periodIso": "2024-03-31",
-        "promoter": 50.34,
-        "fii": 22.10,
-        "dii": 18.42,
-        "public": 9.14,
-        "government": 0.0,
-        "others": 0.0
-      }, ...
-    ]
-  }
+Direct GitHub-IP requests to Screener typically 403. Via the Worker
+they pass cleanly.
 """
 from __future__ import annotations
 
@@ -289,6 +274,95 @@ def parse_shareholding(html: str, symbol: str = "?") -> list[dict[str, Any]]:
     return out
 
 
+# ===== Top holders (named individual investors) =====
+
+TOP_HOLDER_CATEGORIES = (
+    "foreign_institutions",
+    "domestic_institutions",
+    "public",
+    "government",
+)
+
+
+def extract_screener_id(html: str) -> str | None:
+    """Pull Screener's internal company ID from the page HTML.
+
+    The most reliable marker is the "/company/{ID}/add/" URL used by the
+    follow-company button. Falls back to other /company/{ID}/<section>/
+    patterns.
+    """
+    m = re.search(r"/company/(\d+)/(?:add|investors|consolidated)", html)
+    if m:
+        return m.group(1)
+    return None
+
+
+def fetch_top_holders_category(
+    session: requests.Session,
+    screener_id: str,
+    category: str,
+    symbol: str,
+) -> dict[str, dict[str, str]] | None:
+    """Fetch one category of top investors. Returns {holder_name: {period: pct_str}}.
+
+    The Screener API returns each holder's per-quarter percentages as a dict.
+    We strip the 'setAttributes' metadata key from each holder.
+    """
+    if not BSE_PROXY_URL:
+        return None
+    target_path = f"/api/3/{screener_id}/investors/{category}/quarterly/"
+    url = f"{BSE_PROXY_URL.rstrip('/')}/screener?path={urllib.parse.quote(target_path)}"
+    headers = {"Accept": "application/json"}
+    if BSE_PROXY_SECRET:
+        headers["X-Proxy-Secret"] = BSE_PROXY_SECRET
+    try:
+        r = session.get(url, headers=headers, timeout=30)
+        if r.status_code != 200:
+            log(f"    [{symbol}] top-holders {category}: HTTP {r.status_code}")
+            return None
+        try:
+            data = r.json()
+        except ValueError:
+            log(f"    [{symbol}] top-holders {category}: non-JSON body")
+            return None
+        if not isinstance(data, dict):
+            return None
+        cleaned: dict[str, dict[str, str]] = {}
+        for holder, vals in data.items():
+            if not isinstance(vals, dict):
+                continue
+            quarters: dict[str, str] = {}
+            person_url: str | None = None
+            for k, v in vals.items():
+                if k == "setAttributes" and isinstance(v, dict):
+                    person_url = v.get("data-person-url") or v.get("data-company-url")
+                    continue
+                if isinstance(v, str):
+                    quarters[k] = v
+            if quarters:
+                cleaned[holder] = {**quarters, **({"__personUrl": person_url} if person_url else {})}
+        return cleaned
+    except requests.RequestException as e:
+        log(f"    [{symbol}] top-holders {category}: {type(e).__name__}: {e}")
+        return None
+
+
+def fetch_all_top_holders(
+    session: requests.Session,
+    screener_id: str,
+    symbol: str,
+    per_call_delay: float = 0.6,
+) -> dict[str, dict[str, dict[str, str]]]:
+    """Fetch all 4 categories, return {category: {holder: {period: pct_str}}}."""
+    out: dict[str, dict[str, dict[str, str]]] = {}
+    for cat in TOP_HOLDER_CATEGORIES:
+        data = fetch_top_holders_category(session, screener_id, cat, symbol)
+        if data:
+            out[cat] = data
+        time.sleep(per_call_delay)
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -372,7 +446,30 @@ def main() -> int:
                 "quarters": quarters,
             }
             write_json(f"by_ticker/{symbol}/shareholding.json", payload)
-            log(f"  ok ({len(quarters)} quarters)")
+
+            # Second pass: fetch top holders by name per category
+            screener_id = extract_screener_id(html)
+            top_holders_summary = ""
+            if screener_id:
+                top_holders = fetch_all_top_holders(session, screener_id, symbol)
+                if top_holders:
+                    total = sum(len(v) for v in top_holders.values())
+                    write_json(
+                        f"by_ticker/{symbol}/top_holders.json",
+                        {
+                            "symbol": symbol,
+                            "source": "Screener.in",
+                            "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                            "screenerCompanyId": screener_id,
+                            "categories": top_holders,
+                        },
+                    )
+                    top_holders_summary = f" + {total} top holders across {len(top_holders)} cats"
+                else:
+                    top_holders_summary = " (top holders: 0 cats)"
+            else:
+                top_holders_summary = " (no Screener ID)"
+            log(f"  ok ({len(quarters)} quarters{top_holders_summary})")
             time.sleep(args.delay)
 
         log(f"fetch_screener_shareholding: done — {hits} hits, {misses} misses")
