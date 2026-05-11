@@ -50,6 +50,12 @@ ALT_URLS = [
 # Free CORS proxy — last resort if api.bseindia.com is blocked from our IP
 PROXY_TEMPLATE = "https://api.allorigins.win/raw?url={url}"
 
+# Optional Cloudflare Worker proxy (see proxy/ folder for setup).
+# When set, this is tried FIRST because it has the highest success rate
+# (Cloudflare egress IPs are usually accepted by BSE).
+BSE_PROXY_URL = os.environ.get("BSE_PROXY_URL")  # e.g. https://holdingdash-bse-proxy.<acct>.workers.dev
+BSE_PROXY_SECRET = os.environ.get("BSE_PROXY_SECRET")
+
 
 def quarter_ends(n: int) -> list[date]:
     """Return the last n quarter-end dates ending in the most recently
@@ -118,6 +124,49 @@ def _extract_categories(payload: dict[str, Any]) -> dict[str, float]:
 
 
 _PROXY_OK: bool | None = None  # cache: None=unknown, True=use proxy, False=skip
+_WORKER_OK: bool | None = None  # cache for Cloudflare Worker proxy
+
+
+def _try_worker(scrip_code: str, qtrid: str) -> dict[str, Any] | None:
+    """Cloudflare Worker proxy — tried first when BSE_PROXY_URL is set."""
+    global _WORKER_OK
+    if not BSE_PROXY_URL or _WORKER_OK is False:
+        return None
+    bse_path = "/BseIndiaAPI/api/ShareHoldingPatternData/w"
+    full_url = (
+        f"{BSE_PROXY_URL.rstrip('/')}/bse"
+        f"?path={urllib.parse.quote(bse_path)}"
+        f"&scripcd={urllib.parse.quote(scrip_code)}"
+        f"&qtrid={urllib.parse.quote(qtrid)}"
+    )
+    headers = {"Accept": "application/json"}
+    if BSE_PROXY_SECRET:
+        headers["X-Proxy-Secret"] = BSE_PROXY_SECRET
+    try:
+        r = requests.get(full_url, headers=headers, timeout=30)
+        if r.status_code == 200:
+            try:
+                payload = r.json()
+            except ValueError:
+                log(f"      worker: 200 but non-JSON body")
+                return None
+            if payload:
+                _WORKER_OK = True
+                return payload if isinstance(payload, dict) else {"Table": payload}
+            return None
+        upstream_status = r.headers.get("X-Upstream-Status", "?")
+        log(f"      worker: HTTP {r.status_code} (upstream: {upstream_status})")
+        if _WORKER_OK is None:
+            # If first call returns non-200, the proxy itself might be broken — but the
+            # upstream might be 403'ing. Either way, don't disable on first failure;
+            # let the circuit breaker handle the global give-up.
+            pass
+    except requests.RequestException as e:
+        log(f"      worker: {type(e).__name__}: {e}")
+        if _WORKER_OK is None:
+            _WORKER_OK = False
+            log(f"      worker unreachable — disabling for this run")
+    return None
 
 
 def _try_url(session: requests.Session, url: str, params: dict[str, str], note: str) -> dict[str, Any] | None:
@@ -172,8 +221,11 @@ def _try_proxy(scrip_code: str, qtrid: str) -> dict[str, Any] | None:
 def fetch_one(session: requests.Session, scrip_code: str, qtr_end: date) -> dict[str, Any] | None:
     qtrid = qtr_end.strftime("%Y%m%d")
     params = {"scripcd": scrip_code, "qtrid": qtrid}
-    # Try primary, then alternate URLs, then proxy
-    payload = _try_url(session, API_URL, params, "primary")
+    # Order: Cloudflare Worker proxy (highest success), then direct primary,
+    # then alternate BSE URLs, then allorigins free proxy as final fallback.
+    payload = _try_worker(scrip_code, qtrid)
+    if payload is None:
+        payload = _try_url(session, API_URL, params, "primary")
     if payload is None:
         for alt in ALT_URLS:
             payload = _try_url(session, alt, params, f"alt {alt.rsplit('/', 2)[-2]}")
