@@ -24,12 +24,14 @@ import InsiderTimelineChart from './InsiderTimelineChart'
 import InsiderTransactionTable from './InsiderTransactionTable'
 import BulkDealsSection from './BulkDealsSection'
 import DataBadge from './DataBadge'
-import type { LiveDealsBundle, LivePriceHistory } from '../lib/liveData'
+import LiveFilingsTable from './LiveFilingsTable'
+import type { LiveDealsBundle, LiveInsiderBundle, LivePriceHistory } from '../lib/liveData'
 
 interface Props {
   data: InsiderDealsData
   livePrices?: LivePriceHistory | null
   liveDeals?: LiveDealsBundle | null
+  liveInsider?: LiveInsiderBundle | null
 }
 
 const SIGNAL_CHROME: Record<
@@ -90,7 +92,7 @@ const CARD_TONE = {
 
 const HORIZONS: InsiderHorizon[] = ['1Y', '2Y', '5Y', '10Y', 'Max']
 
-export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) {
+export default function InsiderDealsTab({ data, livePrices, liveDeals, liveInsider }: Props) {
   const { summary, pricePoints, trades, deals, dealsRead } = data
   const [horizon, setHorizon] = useState<InsiderHorizon>('5Y')
   const [activeCard, setActiveCard] = useState<InsiderSignalCard | null>(null)
@@ -104,6 +106,14 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
     }
     return pricePoints
   }, [livePrices, pricePoints])
+
+  // Three-way live insider filing state. Mirrors the bulk/block deal pattern:
+  // when the BSE pipeline has run for this ticker but found no filings in the
+  // last 14 days, we show an empty state instead of misleading mock rows.
+  const liveInsiderRows = liveInsider?.rows ?? []
+  const liveInsiderActive = !!liveInsider
+  const usingLiveInsider = liveInsiderRows.length > 0
+  const liveInsiderEmpty = liveInsiderActive && !usingLiveInsider
 
   const liveDealsCount =
     (liveDeals?.bulk?.rows?.length ?? 0) + (liveDeals?.block?.rows?.length ?? 0)
@@ -182,7 +192,16 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
                 <SignalIcon className="h-3 w-3" />
                 {summary.signal}
               </span>
-              <DataBadge state="mock" hint="Signal derived from mock insider trades — NSE blocks GitHub IPs" />
+              <DataBadge
+                state={usingLiveInsider || liveInsiderEmpty ? 'mixed' : 'mock'}
+                hint={
+                  usingLiveInsider
+                    ? 'Live BSE filings power the table below; the narrative signal here is still derived from mock per-trade data (NSE corporates-pit blocks GitHub IPs).'
+                    : liveInsiderEmpty
+                    ? 'Live BSE filings pipeline active for this ticker — no filings in last 14 days. Narrative signal is mock.'
+                    : 'Signal derived from mock insider trades — NSE blocks GitHub IPs'
+                }
+              />
             </div>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
               <span className={chrome.text}>Insider activity is {summary.signal.toLowerCase()}</span>
@@ -265,7 +284,10 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
       {/* === 4. SIGNAL CARDS === */}
       <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
         <span>Signal cards</span>
-        <DataBadge state="mock" />
+        <DataBadge
+          state="mock"
+          hint="Buy intensity, sell pattern, etc. need per-trade structured data which BSE publishes only inside PDFs. PDF parsing is a follow-up phase — cards remain mock for now."
+        />
       </div>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 animate-fadeUp">
         {summary.cards.map((card) => {
@@ -305,10 +327,25 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
       {/* === 5. TRANSACTIONS TABLE === */}
       <section className="animate-fadeUp">
         <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
-          <span>Insider transactions</span>
-          <DataBadge state="mock" hint="NSE corporates-pit API blocks GitHub IPs — mock for now" />
+          <span>{usingLiveInsider || liveInsiderEmpty ? 'Insider-related filings' : 'Insider transactions'}</span>
+          <DataBadge
+            state={usingLiveInsider || liveInsiderEmpty ? 'live' : 'mock'}
+            hint={
+              usingLiveInsider
+                ? `Live from BSE — ${liveInsiderRows.length} filings in last 14 days, refreshed daily`
+                : liveInsiderEmpty
+                ? 'Live BSE filings pipeline active. No insider-related filings for this ticker in last 14 days.'
+                : 'NSE corporates-pit API blocks GitHub IPs — mock for now'
+            }
+          />
         </div>
-        <InsiderTransactionTable trades={trades} />
+        {usingLiveInsider ? (
+          <LiveFilingsTable rows={liveInsiderRows} symbol={liveInsider!.symbol} />
+        ) : liveInsiderEmpty ? (
+          <LiveFilingsEmpty symbol={liveInsider!.symbol} />
+        ) : (
+          <InsiderTransactionTable trades={trades} />
+        )}
       </section>
 
       {/* === 6. BULK / BLOCK DEALS === */}
@@ -371,6 +408,31 @@ export default function InsiderDealsTab({ data, livePrices, liveDeals }: Props) 
         <CardDetailDrawer card={activeCard} onClose={() => setActiveCard(null)} />
       )}
     </div>
+  )
+}
+
+/** Empty-state card shown when the BSE filing pipeline has run for this
+ *  ticker but found zero filings in the lookback window. Mirrors the
+ *  BulkDealsSection empty-state UX. */
+function LiveFilingsEmpty({ symbol }: { symbol: string }) {
+  return (
+    <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
+      <div className="rounded-2xl border border-ink-100 bg-ink-50/40 p-6 text-center">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+          <Wifi className="h-5 w-5" />
+        </div>
+        <h3 className="mt-3 text-lg font-semibold text-ink-900">
+          No insider-related filings for {symbol} in the last 14 days
+        </h3>
+        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-ink-700">
+          The BSE insider-filing pipeline is live for this ticker — we just
+          didn't find any filing under "Insider Trading / SAST" in the last 14
+          days. That's typical outside earnings + trading-window-closure
+          windows. The transactions table is hidden so we don't show mock data
+          while the live pipeline is up.
+        </p>
+      </div>
+    </section>
   )
 }
 

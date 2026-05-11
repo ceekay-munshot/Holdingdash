@@ -83,6 +83,17 @@ export interface LiveInsiderRow {
   toDate: string
   intimationDate: string
   broadcastDate: string
+  /** BSE filing extensions (set when the row originated from the BSE
+   *  AnnSubCategoryGetData feed — the current live source while NSE
+   *  corporates-pit remains blocked). */
+  scripCode?: string
+  headline?: string
+  subcategory?: string
+  attachmentName?: string
+  attachmentUrl?: string
+  attachmentBytes?: number
+  pdfFlag?: boolean
+  newsId?: string
 }
 
 export interface LiveInsiderBundle {

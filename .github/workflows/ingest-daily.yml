@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 25
     env:
       OUT_DIR: ${{ github.workspace }}/data-out
+      BSE_PROXY_URL: ${{ secrets.BSE_PROXY_URL }}
+      BSE_PROXY_SECRET: ${{ secrets.BSE_PROXY_SECRET }}
     steps:
       - name: Checkout source (main)
         uses: actions/checkout@v4

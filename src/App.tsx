@@ -188,6 +188,7 @@ export default function App() {
               data={insider}
               livePrices={live.prices}
               liveDeals={live.deals}
+              liveInsider={live.insider}
             />
           )}
           {activeTab === 'governance' && (
