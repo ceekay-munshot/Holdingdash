@@ -27,6 +27,7 @@ import {
 import type { CompanyOverview, OwnershipTrendsData } from '../types'
 import HolderMovementHeatmap from './HolderMovementHeatmap'
 import HolderMovementTable from './HolderMovementTable'
+import DataBadge from './DataBadge'
 
 interface Props {
   overview: CompanyOverview
@@ -103,6 +104,7 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
                 <StatusIcon className="h-3 w-3" />
                 {story.status}
               </span>
+              <DataBadge state="mock" hint="Movement story derived from mock holders + heatmap" />
             </div>
             <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
               <span className={chrome.text}>Ownership is {story.status.toLowerCase()}</span>
@@ -131,8 +133,11 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
       <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-              Ownership pattern · 20 quarters
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                Ownership pattern · 20 quarters
+              </div>
+              <DataBadge state="mock" hint="Quarterly ownership pattern is mock — BSE shareholding API is closed" />
             </div>
             <h3 className="text-lg font-semibold text-ink-900">Promoter · FII · DII · Public</h3>
           </div>
@@ -204,15 +209,27 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
 
       {/* === 3. HEATMAP === */}
       <section className="animate-fadeUp">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          <span>Movement heatmap</span>
+          <DataBadge state="mock" hint="Derived from mock ownership trend" />
+        </div>
         <HolderMovementHeatmap quarters={heatmap.quarters} rows={heatmap.rows} />
       </section>
 
       {/* === 4. HOLDER TABLE === */}
       <section className="animate-fadeUp">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          <span>Top holder movement</span>
+          <DataBadge state="mock" hint="Holder list and changes are mock — comes free with shareholding data" />
+        </div>
         <HolderMovementTable holders={holders} />
       </section>
 
       {/* === 5. ACCUMULATORS vs REDUCERS === */}
+      <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+        <span>Accumulators vs Reducers</span>
+        <DataBadge state="mock" />
+      </div>
       <section className="grid gap-4 md:grid-cols-2 animate-fadeUp">
         <AccumReduceCard
           tone="positive"
@@ -236,8 +253,11 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
       <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-              Institutional breadth
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                Institutional breadth
+              </div>
+              <DataBadge state="mock" />
             </div>
             <h3 className="text-lg font-semibold text-ink-900">New entries vs exits</h3>
           </div>
@@ -283,8 +303,11 @@ export default function OwnershipTrendsTab({ overview, trends }: Props) {
             <Quote className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">
-              Final ownership trends read
+            <div className="flex items-center gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">
+                Final ownership trends read
+              </div>
+              <DataBadge state="mock" />
             </div>
             <p className="mt-1 max-w-3xl text-[15px] leading-relaxed text-ink-800">{story.finalRead}</p>
             <div className="mt-4 flex flex-wrap gap-2">

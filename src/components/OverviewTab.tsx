@@ -37,6 +37,7 @@ import type {
   TabKey,
 } from '../types'
 import InsightDrawer from './InsightDrawer'
+import DataBadge from './DataBadge'
 
 interface Props {
   overview: CompanyOverview
@@ -145,6 +146,7 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
                   <Eye className="h-3 w-3" />
                   Last quarter: {lastQ.quarter}
                 </span>
+                <DataBadge state="mock" hint="Signal + trend computed from mock 20-quarter ownership pattern" />
               </div>
 
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink-900 md:text-4xl">
@@ -205,6 +207,10 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
         </section>
 
         {/* === 2. CLICKABLE INSIGHT TILES === */}
+        <div className="-mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-500">
+          <span>Insight tiles</span>
+          <DataBadge state="mock" hint="All 4 tiles derived from mock data" />
+        </div>
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <InsightTile
             tone="positive"
@@ -361,8 +367,11 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
         <section className="rounded-3xl border border-ink-100 bg-white p-5 md:p-6 shadow-card animate-fadeUp">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
-                Ownership pattern · 20 quarters
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-400">
+                  Ownership pattern · 20 quarters
+                </div>
+                <DataBadge state="mock" hint="20-quarter ownership pattern is mock data" />
               </div>
               <h3 className="text-lg font-semibold text-ink-900">
                 Promoter · FII · DII · Public
@@ -422,9 +431,12 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
         {/* === 4. WHAT CHANGED RECENTLY === */}
         <section>
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-ink-500">
-              What changed recently
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-ink-500">
+                What changed recently
+              </h3>
+              <DataBadge state="mock" hint="Recent changes derived from mock data" />
+            </div>
             <span className="text-[11px] text-ink-400">{lastQ.quarter}</span>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -464,8 +476,11 @@ export default function OverviewTab({ overview, onJumpTab }: Props) {
               <Quote className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
-                Final buy-side read
+              <div className="flex items-center gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                  Final buy-side read
+                </div>
+                <DataBadge state="mock" hint="Narrative composed from mock signal + trend" />
               </div>
               <p className="mt-1 max-w-3xl text-[15px] leading-relaxed text-ink-800">
                 {signal.buySideRead}
