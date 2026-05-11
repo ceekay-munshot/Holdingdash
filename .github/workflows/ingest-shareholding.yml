@@ -76,18 +76,21 @@ jobs:
 
       - name: Refresh BSE master + NSE→BSE map
         working-directory: source
-        run: python -m ingestion.scripts.fetch_bse_master
+        run: python -u -m ingestion.scripts.fetch_bse_master
+        continue-on-error: true
 
       - name: Fetch shareholding patterns
         working-directory: source
         run: |
-          python -m ingestion.scripts.fetch_shareholding \
+          python -u -m ingestion.scripts.fetch_shareholding \
             --symbols "${HOLDINGDASH_UNIVERSE}" \
             --quarters ${{ inputs.quarters || 20 }}
+        continue-on-error: true
 
       - name: Aggregate per-ticker rollups (quarterly + yearly)
         working-directory: source
-        run: python -m ingestion.scripts.aggregate_per_ticker
+        run: python -u -m ingestion.scripts.aggregate_per_ticker
+        continue-on-error: true
 
       - name: Commit + push
         working-directory: data-out

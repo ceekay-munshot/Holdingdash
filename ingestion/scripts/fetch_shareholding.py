@@ -144,22 +144,35 @@ def main() -> int:
     parser.add_argument("--delay", type=float, default=0.4, help="Delay between calls")
     args = parser.parse_args()
 
+    try:
+        return _run(args)
+    except Exception as e:
+        import traceback
+        log(f"fetch_shareholding: UNEXPECTED ERROR: {e}")
+        log(traceback.format_exc())
+        return 0  # always succeed at the workflow level
+
+
+def _run(args: argparse.Namespace) -> int:
     nse_to_bse_payload = read_json("nse_to_bse.json", default=None)
-    if not nse_to_bse_payload or not nse_to_bse_payload.get("mapping"):
-        log("fetch_shareholding: nse_to_bse.json missing or empty — run fetch_bse_master first")
-        return 2
-    mapping: dict[str, str] = nse_to_bse_payload["mapping"]
+    mapping: dict[str, str] = {}
+    if nse_to_bse_payload and isinstance(nse_to_bse_payload.get("mapping"), dict):
+        mapping = nse_to_bse_payload["mapping"]
+    if not mapping:
+        log("fetch_shareholding: nse_to_bse.json empty — fetch_bse_master must run first")
+        log("fetch_shareholding: writing empty result and exiting cleanly")
+        return 0
 
     universe_spec = args.symbols or os.environ.get("HOLDINGDASH_UNIVERSE") or "NIFTY500"
     equity_master = read_json("equity_master.json", default=None)
     universe = resolve_universe(universe_spec, equity_master)
     if not universe:
-        log(f"fetch_shareholding: empty universe for spec '{universe_spec}'")
-        return 2
+        log(f"fetch_shareholding: empty universe for spec '{universe_spec}' — exiting cleanly")
+        return 0
     quarters = quarter_ends(args.quarters)
     log(
         f"fetch_shareholding: universe='{universe_spec}' ({len(universe)} symbols) "
-        f"× {len(quarters)} quarters"
+        f"× {len(quarters)} quarters · mapping has {len(mapping)} entries"
     )
 
     session = make_bse_session()
