@@ -94,6 +94,21 @@ export interface LiveInsiderRow {
   attachmentBytes?: number
   pdfFlag?: boolean
   newsId?: string
+  /** PDF-parser extensions (set when parse_insider_pdfs successfully extracted
+   *  SAST Reg 29 / Reg 31 form fields from the attachment PDF). All optional;
+   *  rows without these still render as the filing-only headline view. */
+  parseStatus?: 'parsed' | 'failed' | 'skipped'
+  parsedAcquirer?: string
+  parsedIsPromoter?: boolean | null
+  parsedTxnType?: 'Acquisition' | 'Disposal' | 'Encumbrance' | 'Release' | ''
+  parsedMode?: string
+  parsedTransactionDate?: string
+  parsedSharesBefore?: number | null
+  parsedPctBefore?: number | null
+  parsedSharesTransacted?: number | null
+  parsedPctTransacted?: number | null
+  parsedSharesAfter?: number | null
+  parsedPctAfter?: number | null
 }
 
 export interface LiveInsiderBundle {

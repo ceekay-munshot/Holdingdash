@@ -5,11 +5,25 @@ import {
   CalendarClock,
   ExternalLink,
   FileText,
+  Lock,
   Search,
   ShieldAlert,
   Sparkles,
+  Unlock,
 } from 'lucide-react'
 import type { LiveInsiderRow } from '../lib/liveData'
+
+/** Format a share count with Indian grouping (15,64,432). null → "—". */
+function fmtShares(n: number | null | undefined): string {
+  if (n == null) return '—'
+  return n.toLocaleString('en-IN')
+}
+
+/** Compact percentage display (2.41%). null → "—". */
+function fmtPct(p: number | null | undefined): string {
+  if (p == null) return '—'
+  return `${p.toFixed(2)}%`
+}
 
 interface Props {
   rows: LiveInsiderRow[]
@@ -193,23 +207,36 @@ export default function LiveFilingsTable({ rows, symbol }: Props) {
               <tr>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Kind</th>
-                <th className="px-4 py-3">Headline</th>
+                <th className="px-4 py-3">Transaction</th>
+                <th className="px-4 py-3 text-right">Shares</th>
+                <th className="px-4 py-3 text-right">% Holding</th>
                 <th className="px-4 py-3 text-right">PDF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100 bg-white">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-10 text-center text-sm text-ink-400">
+                  <td colSpan={6} className="py-10 text-center text-sm text-ink-400">
                     No filings match this filter.
                   </td>
                 </tr>
               )}
               {filtered.map((r, i) => {
                 const style = BUCKET_STYLE[r._bucket]
+                const parsed = r.parseStatus === 'parsed'
+                const txn = r.parsedTxnType || ''
+                const isPositive = txn === 'Acquisition' || txn === 'Release'
+                const isNegative = txn === 'Disposal' || txn === 'Encumbrance'
+                const TxnIcon = isPositive
+                  ? ArrowUpRight
+                  : isNegative
+                  ? ArrowDownRight
+                  : null
                 return (
                   <tr key={r.newsId || `${r._date}-${i}`} className="group transition-colors hover:bg-emerald-50/30">
-                    <td className="px-4 py-3 tabular-nums text-ink-700">{r._date}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink-700">
+                      {r.parsedTransactionDate || r._date}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${style.bg} ${style.text} ${style.border}`}
@@ -219,9 +246,62 @@ export default function LiveFilingsTable({ rows, symbol }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-ink-900">{r.headline || r.subcategory || '—'}</div>
-                      {r.subcategory && r.subcategory !== r.headline && (
-                        <div className="mt-0.5 text-[11px] text-ink-500">{r.subcategory}</div>
+                      {parsed ? (
+                        <div>
+                          <div className="flex items-center gap-2 font-semibold text-ink-900">
+                            {r.parsedAcquirer || '—'}
+                            {r.parsedIsPromoter && (
+                              <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-wider text-sky-700">
+                                Promoter
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-500">
+                            {TxnIcon && (
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  isPositive
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-rose-50 text-rose-700'
+                                }`}
+                              >
+                                {txn === 'Encumbrance' ? (
+                                  <Lock className="h-2.5 w-2.5" />
+                                ) : txn === 'Release' ? (
+                                  <Unlock className="h-2.5 w-2.5" />
+                                ) : (
+                                  <TxnIcon className="h-2.5 w-2.5" />
+                                )}
+                                {txn}
+                              </span>
+                            )}
+                            {r.parsedMode && <span>{r.parsedMode}</span>}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="font-medium text-ink-900">
+                          {r.headline || r.subcategory || '—'}
+                          <div className="mt-0.5 text-[10.5px] text-ink-400">
+                            Form details inside PDF — auto-parser didn't match this layout.
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {parsed && r.parsedSharesTransacted != null ? (
+                        <div className="text-ink-900">{fmtShares(r.parsedSharesTransacted)}</div>
+                      ) : (
+                        <span className="text-[11px] text-ink-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {parsed && (r.parsedPctBefore != null || r.parsedPctAfter != null) ? (
+                        <div className="text-ink-900">
+                          {fmtPct(r.parsedPctBefore)} <span className="text-ink-400">→</span>{' '}
+                          {fmtPct(r.parsedPctAfter)}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-ink-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

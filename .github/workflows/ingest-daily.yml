@@ -78,6 +78,11 @@ jobs:
         run: python -m ingestion.scripts.fetch_insider_bse
         continue-on-error: true
 
+      - name: Parse SAST/PIT PDFs into structured trade fields
+        working-directory: source
+        run: python -u -m ingestion.scripts.parse_insider_pdfs
+        continue-on-error: true
+
       - name: Aggregate per-ticker rollups
         working-directory: source
         run: python -m ingestion.scripts.aggregate_per_ticker
